@@ -5,7 +5,7 @@ interface Props {
   title: string;
   description?: string;
 }
-const { title, description = profile.headline } = Astro.props;
+const { title, description = profile.description } = Astro.props;
 
 // One shared nav: literal labels a recruiter understands. Everything else stays in body links.
 const nav = [

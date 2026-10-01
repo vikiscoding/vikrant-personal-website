@@ -80,7 +80,7 @@ def share_image() -> Image.Image:
     # Faint heartbeat trace above the footer: the site's theme, not decoration for its own sake.
     base, beat = 520, [(0, 0), (380, 0), (410, -40), (440, 36), (468, -18), (490, 0), (W - 2 * M, 0)]
     d.line([(M + x, base + yy) for x, yy in beat], fill=(205, 219, 229), width=4, joint="curve")
-    d.text((M, 552), "vikrantsingh.fyi  ·  Live reliability  ·  Incident-AI  ·  Writing", font=small, fill=MUTED)
+    d.text((M, 552), "vikrantsingh.fyi  ·  Live reliability  ·  Incident desk  ·  Writing", font=small, fill=MUTED)
     return img
 
 

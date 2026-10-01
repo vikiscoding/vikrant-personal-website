@@ -1,20 +1,15 @@
 // The only place site copy lives. Pages render from this file.
-// Rules: never invent numbers, clients or testimonials. Private workspace names never appear here.
-// Every TODO must be confirmed by Vikrant before P0a ships.
+// Rules: never invent numbers, clients or testimonials. Every figure must trace to the résumé or Vikrant's confirmation.
 
-export interface Exhibit {
-  slug: string;
-  /** Public name, as a recruiter will see it on GitHub or the live site. */
-  name: string;
-  summary: string;
-  /** One-line honest bound. */
-  bound: string;
-  /** The card's one primary action. null = no action yet (nothing half-finished is linked). */
-  link: { label: string; href: string } | null;
-  /** The finished page the card title links to; null = no page yet. */
-  page: string | null;
+export interface Proof {
+  title: string;
+  text: string;
+  /** What it is not. Shown after the text, never first (ADR-022). */
+  scope?: string;
   /** Text status chip (ADR-018): only for something a visitor can see or try right now. */
   chip?: string;
+  /** First link is the primary action; the rest are secondary. */
+  links: { label: string; href: string }[];
 }
 
 export interface Post {
@@ -62,63 +57,70 @@ export function formatDate(iso: string): string {
   return `${d} ${MONTHS[(m ?? 1) - 1]} ${y}`;
 }
 
+// Homepage copy by Vikrant (1 Oct 2026, ADR-022), with factual corrections agreed in review:
+// "IT services" not "software" for fifteen years (2009–2017 was IT operations); the ~95% is the infrastructure
+// for the 22 programs (résumé); the CompuCom team supported the estate, the integration was an SME role (résumé);
+// 55% / 35% are Vikrant's figures (not on the résumé); drafts are never sent by anyone.
 export const profile = {
   name: "Vikrant Singh",
-  // Chosen by Vikrant 30 Sep 2026 (Stage 1.2). LinkedIn must be updated to match word for word (R2).
-  // No "owns the pager" until the heartbeat has 30 days of history plus a game day (ROADMAP Stage 3).
-  headline: "Delivery leader for product and platform teams: plan, gate, production",
-  // Confirmed by Vikrant 30 Sep 2026: CompuCom 2018–2021 (3 years); Virtusa/Citi about 3 years.
-  // Still unconfirmed for public use, so left out: 55% auto-resolve, MTTR −35%.
-  bio: [
-    "I lead delivery of product slices end to end, from the one-pager to production.",
-    "At CompuCom (2018–2021): ServiceNow–Remedy integration and Sev-1/2 operations. At Virtusa for Citi (about 3 years): 22 application programs, design to go-live.",
-    "Today I build AI into operations with a human gate: the AI proposes, people decide.",
+  // Must match the LinkedIn headline (R2). Regenerate public/og.png when it changes (scripts/make-brand-assets.py).
+  headline: "Engineering and operations leader",
+  description:
+    "I lead teams that ship software and keep it running. Delivery across 22 programs at Citi, Sev-1 operations for a 3,000-server government estate, and a site that runs on its own SLOs.",
+  intro: "I lead teams that ship software and keep it running.",
+  story: [
+    "For fifteen years I've been accountable for IT services reaching people and staying up.",
+    "At Citi, through Virtusa, I ran delivery across 22 Trade and Transaction Services programs in North America, from design to go-live; the infrastructure for all 22 landed about 95% on time. Root-cause work on two trade applications cut repeat incidents by 60%.",
+    "For the Government of Ontario, through CompuCom (2018–2021), I led a 15-person global team supporting a 24x7 estate of 3,000+ servers, and was the subject-matter expert on its ServiceNow–Remedy integration. I was the person the client called on Sev-1 and Sev-2, and I ran the response through restore. Fully automated resolution went from zero to 55% of volume, and time to restore fell by 35%.",
   ],
+  principles: {
+    lead: "What I hold a team to.",
+    text: "Work isn't done without tests, monitoring, a way to roll back, and a named person who gets paged. Status means remaining work and risks, not percent complete. When something breaks at 3 a.m., I pick up.",
+  },
+  aim: {
+    lead: "What I'm building toward.",
+    text: "Owning a product team end to end: the build as well as the run.",
+  },
   location: "Toronto, Canada",
   // null = not rendered.
   links: {
     linkedin: "https://www.linkedin.com/in/ssvikrant/",
-    // Set by Vikrant 30 Sep 2026. Must be a working Cloudflare Email Routing address.
     email: "mailto:contact@vikrantsingh.fyi" as string | null,
     medium: "https://medium.com/@svikrant" as string | null,
-    // The account that owns the public engine repo vikrant_perswebsite_incidents_aiengine (verified via gh auth).
     github: "https://github.com/vikiscoding" as string | null,
-    // Web copy (30 Sep 2026): mobile number and personal Gmail removed; contact@vikrantsingh.fyi only.
+    // Web copy: mobile number and personal Gmail removed; contact@vikrantsingh.fyi only.
     resume: "/resume.pdf" as string | null,
   },
-  // One primary call to action per card. Incident-AI first (finished walk), Pulse run last (ADR-015).
-  exhibits: [
+  // "Proof you can open" (ADR-022). Pulse run is folded into the reliability item (it feeds the client-side signal).
+  // Never point Atlas Flow at the Incident-AI videos; its repo is in a private client organisation.
+  proof: [
     {
-      slug: "incident-ai",
-      name: "Incident-AI",
-      summary:
-        "Incident triage where the AI drafts and a human authorizes. Folder is the ticket. If the model is down, the path still works.",
-      bound: "Python on GitHub Actions, handling one small site's real incidents. Not ServiceNow.",
-      link: { label: "Watch the walk (~14 min)", href: "https://youtu.be/j048FYXrRqs" },
-      page: "/exhibits/incident-ai/",
+      title: "This site's reliability",
       chip: "Live",
+      text: "Two service level objectives with live error budgets; an outside probe checks the site every five minutes, and a 30-second game feeds its browser-side numbers. I broke the site on purpose and published the postmortem: eight findings, each with an action and a status.",
+      links: [
+        { label: "Live reliability", href: "/reliability/" },
+        { label: "Postmortem", href: "/notes/postmortem-game-day-1/" },
+        { label: "Play the game", href: "/play/" },
+      ],
     },
     {
-      slug: "atlas-flow",
-      name: "Atlas Flow",
-      summary: "Live TypeScript/Node write path: form to server action to a SharePoint row, in production.",
-      bound: "A marketing site in production, not a system with millions of members.",
-      // Hidden until the written walk exists (30 Sep 2026): no link, no "in progress" page linked.
-      // When it's written: link { label: "Read the walk", href: "/exhibits/atlas-flow/" }, page: "/exhibits/atlas-flow/".
-      // Never point it at the Incident-AI videos; its repo is in a private client organisation.
-      link: null,
-      page: null,
+      title: "Incident desk",
+      chip: "Live",
+      text: "Real alerts from this site go to an AI that proposes triage and drafts updates. Drafts are never sent; priority, resolving and closing are always a person's call, in public GitHub issues. If the model is down, the incident record still works.",
+      scope: "a Python engine running one site's incidents, not ServiceNow.",
+      links: [
+        { label: "Watch the walkthrough (~14 min)", href: "https://youtu.be/j048FYXrRqs" },
+        { label: "See it live", href: "/reliability/#incident-desk" },
+        { label: "How it works", href: "/exhibits/incident-ai/" },
+      ],
     },
     {
-      // ADR-015: exhibit three, a client-path testbed. Never the hero; no numbers here until real samples exist;
-      // never linked to the Incident-AI or Atlas videos or essays.
-      slug: "pulse-run",
-      name: "Pulse run",
-      summary: "Tiny browser runner used as a client perf and error-budget testbed on this same site.",
-      bound: "A 30-second toy, not a product.",
-      link: { label: "Play 30 seconds →", href: "/play/" },
-      page: "/play/",
-      chip: "Playable",
+      title: "Atlas Flow",
+      text: "A live TypeScript/Node write path: web form, server-side validation, then a row written to SharePoint in production.",
+      scope: "a marketing site, not a system with millions of members.",
+      links: [{ label: "Open the live site", href: "https://atlasflowgroup.com" }],
     },
-  ] satisfies Exhibit[],
+  ] satisfies Proof[],
+  writingBlurb: "Short essays on putting AI into operations without losing track of who decides.",
 } as const;

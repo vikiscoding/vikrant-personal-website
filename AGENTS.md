@@ -27,7 +27,8 @@ Vikrant Singh's public site (headline, three exhibits, résumé, contact) plus a
 
 ## Rules
 
-- **Three exhibits, no more** (ADR-015): Incident-AI, Atlas Flow, and Pulse run (a bounded client-path testbed, never the homepage hero). No second game on this domain. Never add other projects.
+- **Three proof items, no more** (ADR-022): this site's reliability (with Pulse run inside it), the incident desk, Atlas Flow. Pulse run is a bounded client-path testbed, never the homepage hero; no second game on this domain. Never add other projects.
+- **Every figure traces to the résumé or Vikrant's explicit confirmation.** "Scope:" lines say what a thing is not; they come after the text, never first.
 - **Pulse run copy:** never "production-grade gaming platform"; no invented SLOs; no numbers on the home card until real samples exist; never link it to the Incident-AI or Atlas Flow videos or essays.
 - **The incident desk only reports, never decides** (ADR-016): the Worker sends `site_alert`/`site_recovered`; every decision after intake is the owner's command on GitHub. Never add a visitor-triggered incident path.
 - **`/api/rum` is the only public write path.** Validate everything (origin, size, type, bounds), store no IP, user agent or cookie, and never feed it into an SLO or an alert. Update `/privacy` before changing what it collects.

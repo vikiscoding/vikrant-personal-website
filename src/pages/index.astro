@@ -1,51 +1,65 @@
 ---
-// Home page contract (M3): headline, 3-line bio, exhibit cards with honest bounds (three max, ADR-015),
-// résumé, email, LinkedIn, Medium, GitHub. Nothing else.
+// Home page (ADR-022): outcome-first headline, the record in three short paragraphs, what I hold a team to,
+// proof you can open, writing, contact. All copy lives in src/data/profile.ts.
 import Base from "../layouts/Base.astro";
 import { profile } from "../data/profile";
 ---
 
-<Base title={`${profile.name} · ${profile.headline}`}>
+<Base title={`${profile.name} · ${profile.headline}`} description={profile.description}>
   <h1>{profile.headline}</h1>
-  {profile.bio.map((line) => <p class="bio">{line}</p>)}
+  <p class="intro">{profile.intro}</p>
 
-  <p class="links">
-    {profile.links.resume && <><a href={profile.links.resume}>Résumé (PDF)</a> · </>}
-    {profile.links.email && <><a href={profile.links.email}>Email</a> · </>}
-    <a href={profile.links.linkedin} rel="me">LinkedIn</a>
-    {profile.links.medium && <> · <a href={profile.links.medium} rel="me">Medium</a></>}
-    {profile.links.github && <> · <a href={profile.links.github} rel="me">GitHub</a></>}
-  </p>
+  {profile.story.map((line) => <p>{line}</p>)}
+  <p><strong>{profile.principles.lead}</strong> {profile.principles.text}</p>
+  <p><strong>{profile.aim.lead}</strong> {profile.aim.text}</p>
 
-  <h2>Exhibits</h2>
-  <ul class="exhibits">
+  <h2>Proof you can open</h2>
+  <ul class="proof">
     {
-      profile.exhibits.map((x) => (
+      profile.proof.map((x) => (
         <li class="card">
-          {/* The title leads to the exhibit page only when it is finished; the link below is the one primary action. */}
-          <h3>{x.page ? <a class="title" href={x.page}>{x.name}</a> : x.name}{x.chip && <span class="chip">{x.chip}</span>}</h3>
-          <p>{x.summary}</p>
-          <p class="bound">Bound: {x.bound}</p>
-          {x.link && <a href={x.link.href}>{x.link.label}</a>}
+          <h3>
+            {x.title}
+            {"chip" in x && x.chip && <span class="chip">{x.chip}</span>}
+          </h3>
+          <p>{x.text}</p>
+          {"scope" in x && x.scope && <p class="scope">Scope: {x.scope}</p>}
+          <p class="actions">
+            {x.links.map((l, i) => (
+              <>
+                {i > 0 && <span class="sep" aria-hidden="true"> · </span>}
+                <a class={i === 0 ? "primary" : undefined} href={l.href}>{l.label}</a>
+              </>
+            ))}
+          </p>
         </li>
       ))
     }
   </ul>
 
-  <p class="more"><a href="/reliability/">Live reliability dashboard →</a></p>
+  <h2>Writing</h2>
+  <p>{profile.writingBlurb} <a href="/notes/">Read the essays →</a></p>
+
+  <p class="links">
+    {profile.links.resume && <><a href={profile.links.resume}>Résumé (PDF)</a> · </>}
+    {profile.links.email && <><a href={profile.links.email}>Email</a> · </>}
+    <a href={profile.links.linkedin} rel="me">LinkedIn</a>
+    {profile.links.github && <> · <a href={profile.links.github} rel="me">GitHub</a></>}
+  </p>
 </Base>
 
 <style>
-  .bio { margin: 0.25rem 0; }
-  .links { margin: 1.5rem 0 2.5rem; word-spacing: 0.15em; line-height: 2; }
-  .more { margin: 1.5rem 0 0; font-size: 0.9375rem; }
-  h2 { font-size: 1.125rem; margin-bottom: 0.75rem; }
-  .exhibits { list-style: none; padding: 0; display: grid; gap: 1rem; }
+  h1 { margin-bottom: 0.5rem; }
+  .intro { font-size: 1.1875rem; margin: 0 0 1.5rem; }
+  h2 { font-size: 1.125rem; margin: 2.5rem 0 0.75rem; }
+  .proof { list-style: none; padding: 0; display: grid; gap: 1rem; }
   .card { border: 1px solid var(--line); border-radius: 8px; padding: 1rem 1.25rem; }
-  .card h3 { margin: 0 0 0.25rem; font-size: 1rem; }
-  .card h3 .title { color: inherit; text-decoration: none; }
-  .card h3 .title:hover { text-decoration: underline; }
+  .card h3 { margin: 0 0 0.35rem; font-size: 1rem; }
+  .card p { margin: 0.3rem 0; }
   .chip { display: inline-block; margin-left: 0.5rem; padding: 0 0.45rem; border: 1px solid var(--good); border-radius: 999px; color: var(--good); font-size: 0.75rem; font-weight: 600; line-height: 1.5; vertical-align: 0.1rem; }
-  .card p { margin: 0.25rem 0; }
-  .bound { color: var(--muted); font-size: 0.9375rem; }
+  .scope { color: var(--muted); font-size: 0.9375rem; }
+  .actions { margin-top: 0.6rem !important; font-size: 0.9375rem; }
+  .actions .primary { font-weight: 600; }
+  .sep { color: var(--muted); }
+  .links { margin: 2.5rem 0 0; word-spacing: 0.15em; line-height: 2; }
 </style>
