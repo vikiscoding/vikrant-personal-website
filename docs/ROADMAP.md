@@ -15,11 +15,13 @@ Engineering roadmap for vikrantsingh.fyi. Decisions are in [`docs/adr/`](adr/REA
 | Game day 1 and its fixes; public postmortem (ADR-017) | 1 Oct 2026 |
 | Brand assets and share image; Pulse run invitation (ADR-018, 019) | 1 Oct 2026 |
 | Repository made public (ADR-020) | 1 Oct 2026 |
+| The live desk never lets the model set priority; the site says AI priority never pages anyone (ADR-021) | 1 Oct 2026 |
+| Homepage rewrite: "Engineering and operations leader", proof you can open, "Scope:" lines; share image versioned by headline (ADR-022) | 1 Oct 2026 |
 
 ## Next
 
 - [ ] **First 30-day SLO report, 30 Oct 2026.** Save the outside probe's 30-day uptime (SLO-1) and the ledger's scheduled-job success (SLO-2). Consider switching `DASHBOARD_MODE` to `auto`.
-- [ ] **Game day 2: page on purpose.** Run long enough for the outside probe to page, proving the probe → alert path end to end (game day 1, finding 8).
+- [ ] **Game day 2: page on purpose, recorded.** Hold the fault until the outside probe pages (about 40–45 min after the last good run), restore, then work the incident through the human gate. Proves the probe → alert path end to end (game day 1, finding 8). Prerequisite: the alert channel has space (finding 7).
 - [ ] **Pulse run break and restore.** After a few quiet days: deploy `FAULT=game_js_error`, watch the client-path block react, restore, and write it up.
 - [ ] **Repo-aware suggestions** in the incident engine: one demo repo, read-only. Each suggestion gives a likely cause, a candidate file, confidence, and "verify before prod", and is always labelled *proposed, not applied*.
 

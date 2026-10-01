@@ -9,6 +9,7 @@ Last updated: 1 Oct 2026.
 | Component | State |
 | --- | --- |
 | Site | https://vikrantsingh.fyi on Cloudflare Workers; `main` deploys through GitHub Actions; `http` and `www` redirect to the apex |
+| Homepage | Headline "Engineering and operations leader"; the record (Citi/Virtusa, Ontario/CompuCom); "Proof you can open": this site's reliability (Pulse run inside it), the incident desk, Atlas Flow's live site; "Scope:" lines (ADR-022) |
 | Heartbeat | Cron every 10 min fetches this repo's latest commit and CI status from GitHub into KV; the footer shows it; `/api/pulse` returns 200 while the snapshot is under 35 min old |
 | Outside probe | UptimeRobot keyword monitor on `/api/pulse` every 5 min; email alerts. SLO clock Day 0 = 30 Sep 2026 |
 | SLI ledger | Durable Object `SliLedger`: daily counts and histograms per source, failures in full; public `/api/slo?days=N` |
@@ -16,12 +17,14 @@ Last updated: 1 Oct 2026.
 | Incident desk | 2 failed runs → `repository_dispatch` to the incident engine; owner `/commands` on GitHub Issues are the human gate; every AI priority waits for `/approve` (ADR-021); the site reads the engine's public `feed.json` |
 | Pulse run | `/play/`: validated `POST /api/rum`, no IP, user agent or cookie; personal result at game over |
 | Visit counter | Counting, hidden until 1,000 views (`VISITS_MODE=auto`) |
-| Brand | Favicon set and 1200×630 share image from `scripts/make-brand-assets.py` |
+| Brand | Favicon set and 1200×630 share image from `scripts/make-brand-assets.py` (reads the headline); `og:image` URL is versioned by the headline so caches never serve a stale card |
 
 ## Verified
 
 - Game day 1 (1 Oct 2026, `FAULT=github_5xx`): the alert was raised by the site, triaged by the engine, worked through the human gate, and recovery was reported automatically. Eight findings, six fixed. Record: `docs/gamedays/2026-10-01-github_5xx.md`; public postmortem: `/notes/postmortem-game-day-1/`.
 - Endpoint validation for `/api/rum` (origin, size, type, bounds), scripted playthroughs, the `game_js_error` game day, degrade-open behaviour, the Toronto-time boundaries across DST.
+- Live desk policy: the engine's live workflow runs with `TRIAGE_AUTO_APPLY=off`, so a confident Low still waits for `/approve` (engine test `test_live_desk_never_auto_applies_even_low`, ADR-021).
+- Homepage copy: every figure traced to the résumé or Vikrant's confirmation before publishing (ADR-022).
 
 ## Pending
 
