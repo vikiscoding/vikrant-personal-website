@@ -16,7 +16,9 @@ const nav = [
 const here = Astro.url.pathname;
 const canonical = new URL(Astro.url.pathname, Astro.site);
 // Share preview (ADR-018). Regenerate public/og.png with scripts/make-brand-assets.py when the headline changes.
-const shareImage = new URL("/og.png", Astro.site);
+// The ?v= is derived from the headline, so a new headline gets a new URL and no edge or LinkedIn cache serves the old card.
+const shareVersion = [...profile.headline].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7).toString(36);
+const shareImage = new URL(`/og.png?v=${shareVersion}`, Astro.site);
 const isCurrent = (href: string) => (href === "/" ? here === "/" : here.startsWith(href));
 ---
 
