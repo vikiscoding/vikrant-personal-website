@@ -12,6 +12,8 @@ const nav = [
   { href: "/", label: "Home" },
   { href: "/reliability/", label: "Live reliability" },
   { href: "/notes/", label: "Writing" },
+  // ADR-024: the game gets a literal nav link, last, so people can find it (it creates the client-path data).
+  { href: "/play/", label: "Play" },
 ];
 const here = Astro.url.pathname;
 const canonical = new URL(Astro.url.pathname, Astro.site);

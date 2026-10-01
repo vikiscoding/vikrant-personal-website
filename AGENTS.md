@@ -34,7 +34,7 @@ Vikrant Singh's public site (headline, three exhibits, résumé, contact) plus a
 - **`/api/rum` is the only public write path.** Validate everything (origin, size, type, bounds), store no IP, user agent or cookie, and never feed it into an SLO or an alert. Update `/privacy` before changing what it collects.
 - **Keep personal planning out of this repo.** It is public.
 - **Never invent** numbers, clients or testimonials. Unconfirmed copy stays marked `TODO`.
-- **Nav labels stay literal:** Home · Live reliability · Writing. No "observability" or "SLO console" in public labels. No gradients, galleries or stock hero.
+- **Nav labels stay literal:** Home · Live reliability · Writing · Play (ADR-024; Play stays last). No "observability" or "SLO console" in public labels. No gradients, galleries or stock hero.
 - **Writing lists and links; it never republishes.** Titles and dates come from the Medium feed, and claims are the post's own words.
 - **No claim ahead of evidence.** "Owns the pager" waits for a full 30-day SLO window; no film link until the film is published; the incident agent's suggestions are always "proposed, not applied"; never break or test Balance-Books or any live business site on purpose (ADR-008).
 - **No personal data in logs**: no IP, email, body, headers or tokens.
