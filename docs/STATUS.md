@@ -9,7 +9,7 @@ Last updated: 1 Oct 2026.
 | Component | State |
 | --- | --- |
 | Site | https://vikrantsingh.fyi on Cloudflare Workers; `main` deploys through GitHub Actions; `http` and `www` redirect to the apex |
-| Homepage | Headline "Engineering and operations leader"; the record (Citi/Virtusa, Ontario/CompuCom); "Proof you can open": this site's reliability (Pulse run inside it), the incident desk, Atlas Flow's live site; "Scope:" lines (ADR-022) |
+| Homepage | Headline "IT Operations and Engineering"; the record (Citi/Virtusa, Ontario/CompuCom); "Proof you can open": this site's reliability (Pulse run inside it), the incident desk, Balance-Books, Atlas Flow's live site; "Scope:" lines (ADR-022, ADR-023) |
 | Heartbeat | Cron every 10 min fetches this repo's latest commit and CI status from GitHub into KV; the footer shows it; `/api/pulse` returns 200 while the snapshot is under 35 min old |
 | Outside probe | UptimeRobot keyword monitor on `/api/pulse` every 5 min; email alerts. SLO clock Day 0 = 30 Sep 2026 |
 | SLI ledger | Durable Object `SliLedger`: daily counts and histograms per source, failures in full; public `/api/slo?days=N` |

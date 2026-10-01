@@ -16,7 +16,8 @@ Engineering roadmap for vikrantsingh.fyi. Decisions are in [`docs/adr/`](adr/REA
 | Brand assets and share image; Pulse run invitation (ADR-018, 019) | 1 Oct 2026 |
 | Repository made public (ADR-020) | 1 Oct 2026 |
 | The live desk never lets the model set priority; the site says AI priority never pages anyone (ADR-021) | 1 Oct 2026 |
-| Homepage rewrite: "Engineering and operations leader", proof you can open, "Scope:" lines; share image versioned by headline (ADR-022) | 1 Oct 2026 |
+| Homepage rewrite: proof you can open, "Scope:" lines; share image versioned by headline (ADR-022) | 1 Oct 2026 |
+| Headline "IT Operations and Engineering"; Balance-Books added as proof (ADR-023) | 1 Oct 2026 |
 
 ## Next
 

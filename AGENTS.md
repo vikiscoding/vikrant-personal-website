@@ -27,7 +27,7 @@ Vikrant Singh's public site (headline, three exhibits, résumé, contact) plus a
 
 ## Rules
 
-- **Three proof items, no more** (ADR-022): this site's reliability (with Pulse run inside it), the incident desk, Atlas Flow. Pulse run is a bounded client-path testbed, never the homepage hero; no second game on this domain. Never add other projects.
+- **Four proof items, no more** (ADR-022, ADR-023): this site's reliability (with Pulse run inside it), the incident desk, Balance-Books, Atlas Flow. Pulse run is a bounded client-path testbed, never the homepage hero; no second game on this domain. Never add other projects.
 - **Every figure traces to the résumé or Vikrant's explicit confirmation.** "Scope:" lines say what a thing is not; they come after the text, never first.
 - **Pulse run copy:** never "production-grade gaming platform"; no invented SLOs; no numbers on the home card until real samples exist; never link it to the Incident-AI or Atlas Flow videos or essays.
 - **The incident desk only reports, never decides** (ADR-016): the Worker sends `site_alert`/`site_recovered`; every decision after intake is the owner's command on GitHub. Never add a visitor-triggered incident path.
@@ -36,7 +36,7 @@ Vikrant Singh's public site (headline, three exhibits, résumé, contact) plus a
 - **Never invent** numbers, clients or testimonials. Unconfirmed copy stays marked `TODO`.
 - **Nav labels stay literal:** Home · Live reliability · Writing. No "observability" or "SLO console" in public labels. No gradients, galleries or stock hero.
 - **Writing lists and links; it never republishes.** Titles and dates come from the Medium feed, and claims are the post's own words.
-- **No claim ahead of evidence.** "Owns the pager" waits for a full 30-day SLO window; no film link until the film is published; the incident agent's suggestions are always "proposed, not applied"; no client sites on this domain.
+- **No claim ahead of evidence.** "Owns the pager" waits for a full 30-day SLO window; no film link until the film is published; the incident agent's suggestions are always "proposed, not applied"; never break or test Balance-Books or any live business site on purpose (ADR-008).
 - **No personal data in logs**: no IP, email, body, headers or tokens.
 - **Degrade open.** Nothing dynamic may fail a page. Only `/api/pulse` may return 5xx on purpose.
 - **Faults are deploy-time only.** Never add a request-time fault toggle to the site Worker.
