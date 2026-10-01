@@ -26,6 +26,11 @@ Engineering roadmap for vikrantsingh.fyi. Decisions are in [`docs/adr/`](adr/REA
 - [ ] **Pulse run break and restore.** After a few quiet days: deploy `FAULT=game_js_error`, watch the client-path block react, restore, and write it up.
 - [ ] **Repo-aware suggestions** in the incident engine: one demo repo, read-only. Each suggestion gives a likely cause, a candidate file, confidence, and "verify before prod", and is always labelled *proposed, not applied*.
 
+## Later (ideas, not scheduled)
+
+- **Pulse run server actions, for a user-journey SLO.** Today the game's telemetry is client-only and spoofable, so it can never be an SLO (ADR-015). Give the game a few small server calls during a session (for example a checkpoint at start, at each 30 s and at game over) and measure them **on the server**: success rate and latency per session. That makes a trustworthy journey-level SLI, a candidate third SLO ("a game session's server calls succeed and return within N ms"), and a way to stress-test the user-facing path deliberately (`FAULT` values such as `game_api_slow` / `game_api_5xx`).
+  - Guardrails before building: an ADR; no shared state written by visitors (read-mostly or per-session only); validation and a per-session rate cap like `/api/rum`; recorded in the SLI ledger as its own source; `/privacy` updated first; never feeds paging until it has a full 30-day window.
+
 ## Parked
 
 Each of these needs a written reason before it moves.
