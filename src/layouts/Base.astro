@@ -1,0 +1,125 @@
+---
+import { profile } from "../data/profile";
+
+interface Props {
+  title: string;
+  description?: string;
+}
+const { title, description = profile.headline } = Astro.props;
+
+// One shared nav: literal labels a recruiter understands. Everything else stays in body links.
+const nav = [
+  { href: "/", label: "Home" },
+  { href: "/reliability/", label: "Live reliability" },
+  { href: "/notes/", label: "Writing" },
+];
+const here = Astro.url.pathname;
+const canonical = new URL(Astro.url.pathname, Astro.site);
+// Share preview (ADR-018). Regenerate public/og.png with scripts/make-brand-assets.py when the headline changes.
+const shareImage = new URL("/og.png", Astro.site);
+const isCurrent = (href: string) => (href === "/" ? here === "/" : here.startsWith(href));
+---
+
+<!doctype html>
+<html lang="en-CA">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/favicon.ico" sizes="48x48" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="theme-color" content="#fbfbf9" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#141413" media="(prefers-color-scheme: dark)" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Vikrant Singh" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:image" content={shareImage} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content={`${profile.name}: ${profile.headline}`} />
+    <meta name="twitter:card" content="summary_large_image" />
+  </head>
+  <body>
+    <header class="site-head">
+      <a class="wordmark" href="/" aria-label={`${profile.name}, home`}>
+        <svg viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" /><polyline points="10,34 22,34 27,22 33,46 38,30 42,34 54,34" /></svg>
+        <span>{profile.name}</span>
+      </a>
+      <nav class="site-nav" aria-label="Site">
+        {nav.map((item) => (
+          <a href={item.href} aria-current={isCurrent(item.href) ? "page" : undefined}>{item.label}</a>
+        ))}
+      </nav>
+    </header>
+    <main>
+      <slot />
+    </main>
+    <footer>
+      <!-- Filled at the edge by worker/pulse.ts. If the heartbeat is off or down, this fallback stays. -->
+      <!-- [data-visits] stays hidden until the VISITS_MODE flag allows it (worker/visits.ts). -->
+      <p class="pulse"><span data-pulse>Built in the open.</span><span data-visits hidden></span> · <a href="/notes/how-this-site-is-run/">How this site is run</a></p>
+      <p><a href="/privacy/">Privacy</a></p>
+    </footer>
+  </body>
+</html>
+
+<style is:global>
+  :root {
+    --bg: #fbfbf9;
+    --fg: #1b1b1a;
+    --muted: #5d5d58;
+    --line: #e2e1dc;
+    --accent: #1f5f8b;
+    --surface: #f3f2ee;
+    --good: #2f7d4f;
+    --warn: #b7791f;
+    --bad: #b83a3a;
+    --none: #d9d8d3;
+    color-scheme: light dark;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #141413;
+      --fg: #ececea;
+      --muted: #a3a39e;
+      --line: #2e2e2b;
+      --accent: #7ab4dc;
+      --surface: #1c1c1a;
+      --good: #5fbf85;
+      --warn: #e0a84a;
+      --bad: #e57373;
+      --none: #3a3a37;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-variant-numeric: tabular-nums;
+    margin: 0 auto;
+    max-width: 42rem;
+    padding: 3rem 1rem;
+    background: var(--bg);
+    color: var(--fg);
+    font: 1.0625rem/1.6 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  a { color: var(--accent); }
+  .site-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.75rem 1.5rem; margin: -1.5rem 0 2.75rem; }
+  .wordmark { display: inline-flex; align-items: center; gap: 0.55rem; color: var(--fg); text-decoration: none; font-weight: 650; letter-spacing: -0.01em; }
+  .wordmark svg { width: 1.35rem; height: 1.35rem; flex: none; }
+  .wordmark svg rect { fill: var(--accent); }
+  .wordmark svg polyline { fill: none; stroke: var(--bg); stroke-width: 5; stroke-linecap: round; stroke-linejoin: round; }
+  .wordmark:hover span { text-decoration: underline; }
+  .site-nav { display: flex; flex-wrap: wrap; gap: 0.35rem 1.5rem; font-size: 0.9375rem; }
+  .site-nav a { color: var(--muted); text-decoration: none; padding: 0.2rem 0; }
+  .site-nav a:hover { color: var(--fg); text-decoration: underline; }
+  .site-nav a[aria-current="page"] { color: var(--fg); font-weight: 600; }
+  /* Muted colour is reserved for dates and bounds (and secondary UI like the nav). */
+  .muted, time.muted { color: var(--muted); }
+  h1 { font-size: 1.75rem; line-height: 1.25; margin: 0 0 1rem; }
+  footer { margin-top: 4rem; padding-top: 1rem; border-top: 1px solid var(--line); color: var(--muted); font-size: 0.875rem; }
+  footer p { margin: 0.25rem 0; }
+</style>

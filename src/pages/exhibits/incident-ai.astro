@@ -1,0 +1,28 @@
+---
+// Copy set by Vikrant 30 Sep 2026. Both videos tell the gated-incident story; never reuse them for Atlas Flow.
+// Primary action: the ~14 min walkthrough. Second: the Medium essay with its date.
+import Base from "../../layouts/Base.astro";
+import { formatDate, writing } from "../../data/profile";
+
+const essay = writing.find((p) => p.url.includes("ai-proposes-a-human-authorizes"));
+---
+
+<Base title="Incident-AI · the gated path">
+  <h1>Incident-AI: the AI proposes, a human approves</h1>
+  <p>Alert in → persist → proposal → human gate → traces. Drafts start unsent. Close needs a person.</p>
+  <p class="primary"><a href="https://youtu.be/j048FYXrRqs">Watch the walkthrough (~14 min)</a></p>
+  {essay && (
+    <p>
+      <a href={essay.url}>Read the essay on Medium: “{essay.title}”</a>
+      <time class="muted" datetime={essay.date}> · {formatDate(essay.date)}</time>
+    </p>
+  )}
+  <p><a href="https://youtu.be/z1tyxIPBWpM">Short clip: model down, ticket survives (~3 min)</a></p>
+  <p><a href="/reliability/#incident-desk">See it handle this site's real incidents, live →</a></p>
+  <p>Code: <a href="https://github.com/vikiscoding/vikrant_perswebsite_incidents_aiengine">vikiscoding/vikrant_perswebsite_incidents_aiengine</a></p>
+  <p class="muted">Bound: Python, not ServiceNow itself and not a bank's stack.</p>
+</Base>
+
+<style>
+  .primary { font-size: 1.0625rem; font-weight: 600; margin-top: 1.25rem; }
+</style>

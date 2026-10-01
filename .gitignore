@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.astro/
+.wrangler/
+.dev.vars
+
+# Original résumé copies with private contact details. Only public/resume.pdf (the web copy) is published.
+/resume.pdf
+/Vikrant_Singh_Resume_Site.pdf

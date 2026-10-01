@@ -1,0 +1,140 @@
+---
+// Public postmortem for game day 1. Prose is Vikrant's; facts trace to docs/gamedays/2026-10-01-github_5xx.md.
+// No "owns the pager" claim until a full 30-day SLO window exists.
+import Base from "../../layouts/Base.astro";
+
+const issue = "https://github.com/vikiscoding/vikrant_perswebsite_incidents_aiengine/issues/2";
+---
+
+<Base
+  title="Postmortem: game day 1 · vikrantsingh.fyi"
+  description="I broke this site's scheduled job on purpose to test the incident desk end to end. Eight findings, six fixed."
+>
+  <p class="kicker"><time datetime="2026-10-01">1 October 2026</time> · Planned game day, not a real outage</p>
+  <h1>Postmortem: game day 1</h1>
+
+  <h2>Summary</h2>
+  <p>
+    On 1 October I broke this site's scheduled job on purpose, to test the incident desk end to end. The site noticed
+    after two failed runs, raised an incident by itself, and an AI triaged it while every decision after that stayed
+    with me. Visitors saw nothing. I found eight problems; six are fixed.
+  </p>
+
+  <dl class="facts">
+    <div><dt>Fault</dt><dd>The scheduled job's call to GitHub forced to fail (HTTP 503)</dd></div>
+    <div><dt>User impact</dt><dd>None. Every page served throughout</dd></div>
+    <div><dt>Time to detect</dt><dd>17 min (two failed runs, by design)</dd></div>
+    <div><dt>Time to restore</dt><dd>27 min</dd></div>
+    <div><dt>Error budget used</dt><dd>Scheduled job: 2 of 86 failures allowed this month (2.3%). Outside probe: 0 failed checks</dd></div>
+    <div><dt>Incident record</dt><dd><a href={issue}>GitHub issue #2</a></dd></div>
+  </dl>
+
+  <h2>Timeline</h2>
+  <p class="muted small">Toronto time (EDT), 1 October.</p>
+  <table>
+    <tbody>
+      <tr><th scope="row">1:10 a.m.</th><td>Last healthy run before the fault</td></tr>
+      <tr><th scope="row">1:13</th><td>Fault deployed through the normal pipeline</td></tr>
+      <tr><th scope="row">1:20</th><td>Run 1 fails. Counted, no incident: one blip is not an incident</td></tr>
+      <tr><th scope="row">1:30</th><td>Run 2 fails. <strong>The site raises the alert on its own</strong></td></tr>
+      <tr><th scope="row">1:30</th><td>The alert lands on an open test incident instead of a new one (finding 1)</td></tr>
+      <tr><th scope="row">1:33</th><td>Restore deployed</td></tr>
+      <tr><th scope="row">1:40</th><td>For about 15 seconds the snapshot is exactly 30 minutes old and the page says "Heartbeat late"; no probe lands in the window (finding 3)</td></tr>
+      <tr><th scope="row">1:40</th><td>Healthy run. The site reports recovery; the engine notes that resolving is a human decision</td></tr>
+      <tr><th scope="row">1:47</th><td>My out-of-order <code>/resolve</code> is refused by the lifecycle, but the issue gets closed by the button (finding 5)</td></tr>
+      <tr><th scope="row">2:39</th><td>A command with a leading space is skipped without a word (finding 6)</td></tr>
+    </tbody>
+  </table>
+
+  <h2>What the outside view and the site's own records each showed</h2>
+  <p>Three views watched the same failure, and they disagreed.</p>
+  <p>
+    The site's own records saw it first. Scheduled job success dropped to 98.71%, two failed runs out of 78, logged
+    within seconds.
+  </p>
+  <p>
+    The outside probe stayed green the whole time. It asks one question: is the status snapshot fresh? The last good
+    snapshot was still young enough, so the answer was yes. That is correct. Visitors were fine.
+  </p>
+  <p>
+    The dashboard's headline believed the probe. For about twenty minutes it said "Operating normally" while the job
+    behind it was failing.
+  </p>
+  <p>
+    None of these were wrong. They answer different questions: are users affected, and is the system healthy? The
+    headline only asked the first. It now asks both, and says "Degraded" when the last run failed, even if visitors are
+    still fine.
+  </p>
+
+  <h2>What went well</h2>
+  <ul>
+    <li>The site raised the alert by itself; the incident engine ran with no human involved.</li>
+    <li>One failed run did not raise an incident. The anti-flap rule held.</li>
+    <li>The AI triaged it, drafted updates marked "never sent", and flagged two real gaps in its own setup.</li>
+    <li>The human gate held: an out-of-order resolve was refused.</li>
+    <li>Recovery was reported automatically; resolving stayed a human decision.</li>
+  </ul>
+
+  <h2>What hurt</h2>
+  <p>
+    My own test incident swallowed the real alert. An open "manual test" ticket for the same site was treated as the
+    same problem, so the game day's alert landed as a comment on a test. Deduplication now matches the monitor as well as
+    the service.
+  </p>
+  <p>
+    The timing was luck, not design. Two failed runs, ten minutes apart, put the snapshot at exactly thirty minutes old,
+    the limit. For fifteen seconds the page said "Heartbeat late". The outside probe checks every five minutes, so it
+    missed that window. Had it landed there, I would have been paged for a failure that was already recovering. The
+    limit is now 35 minutes.
+  </p>
+  <p>
+    The gate held, but the interface around it didn't. I tried to resolve the incident before acknowledging it. The
+    lifecycle refused, which is what it is for. But the same click closed the GitHub issue, so GitHub said "closed" while
+    the incident record said "triaging". Closing an incident issue now reopens it until the record agrees. Then a command
+    with one leading space was skipped without a word. A strict gate is fine. A silent one isn't. Commands now tolerate
+    whitespace, and refusals say what to do next.
+  </p>
+  <p>
+    Two things are still open. Alerts go to a mailbox that is almost full, and a full mailbox is a silent pager. And this
+    game day never tested paging at all: detection came from the site itself. The next one will run long enough to page
+    me on purpose.
+  </p>
+
+  <h2>Findings and actions</h2>
+  <div class="scroll"><table class="findings">
+    <thead><tr><th scope="col">#</th><th scope="col">Finding</th><th scope="col">Action</th><th scope="col">Status</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>An open test incident swallowed the real alert</td><td>Deduplicate on monitor and service</td><td>Fixed</td></tr>
+      <tr><td>2</td><td>The headline said "Operating normally" while the job failed</td><td>Show "Degraded: last scheduled run failed"</td><td>Fixed</td></tr>
+      <tr><td>3</td><td>Two failed runs land exactly on the 30-minute staleness limit</td><td>Limit raised to 35 minutes</td><td>Fixed</td></tr>
+      <tr><td>4</td><td>The incident engine didn't know this site: no owner, no blast radius, no runbook hint</td><td>Site and its dependencies added to its CMDB</td><td>Fixed</td></tr>
+      <tr><td>5</td><td>Closing the issue with the button bypassed the incident record</td><td>Reopen until the record agrees; refusals name the next step</td><td>Fixed</td></tr>
+      <tr><td>6</td><td>A leading space made a command disappear silently</td><td>Commands tolerate whitespace</td><td>Fixed</td></tr>
+      <tr><td>7</td><td>The alert mailbox is nearly full: a silent pager</td><td>Clear space or add a second channel</td><td>Open (me)</td></tr>
+      <tr><td>8</td><td>This game day never exercised paging</td><td>Next game day runs long enough to page on purpose</td><td>Open</td></tr>
+    </tbody>
+  </table></div>
+
+  <p class="more">
+    <a href="/reliability/">Live reliability</a> · <a href={issue}>The incident on GitHub</a> · <a href="/notes/how-this-site-is-run/">How this site is run</a>
+  </p>
+</Base>
+
+<style>
+  .kicker { color: var(--muted); font-size: 0.875rem; margin: 0 0 0.5rem; }
+  h2 { font-size: 1.125rem; margin: 2.25rem 0 0.5rem; }
+  .small { font-size: 0.875rem; }
+  .facts { display: grid; gap: 0.35rem 1.5rem; grid-template-columns: max-content 1fr; margin: 1.25rem 0 0; font-size: 0.9375rem; }
+  .facts div { display: contents; }
+  .facts dt { color: var(--muted); }
+  .facts dd { margin: 0; }
+  @media (max-width: 480px) { .facts { grid-template-columns: 1fr; } .facts dd { margin-bottom: 0.4rem; } }
+  table { width: 100%; border-collapse: collapse; font-size: 0.9375rem; }
+  th, td { text-align: left; vertical-align: top; padding: 0.4rem 0.5rem; border-bottom: 1px solid var(--line); }
+  tbody th { color: var(--muted); font-weight: 500; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .findings thead th { color: var(--muted); font-weight: 500; }
+  .findings td:last-child { white-space: nowrap; }
+  .more { margin-top: 2rem; font-size: 0.9375rem; }
+  .scroll { overflow-x: auto; }
+  .findings { min-width: 34rem; }
+</style>

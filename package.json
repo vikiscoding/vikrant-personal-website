@@ -1,0 +1,21 @@
+{
+  "name": "vikrantsingh-fyi",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "check": "astro check && tsc -p worker/tsconfig.json --noEmit",
+    "preview": "npm run build && wrangler dev",
+    "deploy": "npm run build && wrangler deploy"
+  },
+  "dependencies": {
+    "astro": "^7.3.5"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.10",
+    "@cloudflare/workers-types": "^5.20260929.1",
+    "typescript": "^6.0.3",
+    "wrangler": "^4.144.0"
+  }
+}

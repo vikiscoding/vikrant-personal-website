@@ -1,0 +1,274 @@
+---
+// Pulse run (ADR-015): a 30-second toy whose real job is client-path telemetry for /reliability/.
+// No accounts, ads, WebGL, multiplayer, leaderboard or storage. Telemetry: worker/rum.ts.
+import Base from "../layouts/Base.astro";
+---
+
+<Base title="Pulse run · vikrantsingh.fyi" description="A 30-second browser runner that reports its own errors and frame times to this site's Live reliability page.">
+  <h1>Pulse run</h1>
+  <p>
+    Play for 30 seconds and your run becomes real data on this site's{" "}
+    <a href="/reliability/#client-path">Live reliability</a> page: script errors and frame times, nothing about you.
+  </p>
+  <p><strong>Jump:</strong> Space, ↑ or tap. <strong>Duck:</strong> ↓ or swipe down.</p>
+
+  <div class="stage">
+    <canvas data-game width="640" height="200" tabindex="0" role="img" aria-label="Pulse run game. Press Space or tap to start."></canvas>
+  </div>
+  <p class="status" aria-live="polite" data-status></p>
+  <!-- ADR-019: the personal result, computed in this browser. "Sent", not "recorded": a beacon cannot confirm storage. -->
+  <p class="result" data-result hidden></p>
+
+  <p class="note">
+    While you play, the game sends anonymous events (start, game over, errors, frame times) to this site. They show up
+    under <em>Client path</em> on <a href="/reliability/">Live reliability</a>. No cookies, no IP address.{" "}
+    <a href="/privacy/">Privacy</a>
+  </p>
+  <p class="muted bound">Bound: a 30-second toy, not a product and not a bank stack.</p>
+</Base>
+
+<style>
+  .stage { margin: 1.5rem 0 0.5rem; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--surface); }
+  canvas { display: block; width: 100%; height: auto; aspect-ratio: 16 / 5; touch-action: none; cursor: pointer; outline: none; }
+  canvas:focus-visible { box-shadow: inset 0 0 0 2px var(--accent); }
+  .status { min-height: 1.6em; font-size: 0.9375rem; margin: 0.25rem 0 0.25rem; }
+  .result { font-size: 0.9375rem; margin: 0 0 1.5rem; padding: 0.5rem 0.75rem; border-left: 3px solid var(--good); background: var(--surface); }
+  .note { font-size: 0.9375rem; }
+  .bound { font-size: 0.875rem; }
+</style>
+
+<script>
+  // ---------- telemetry (ADR-015): same origin, validated server-side, never an SLO ----------
+  const session = Array.from(crypto.getRandomValues(new Uint8Array(8)), (b) => b.toString(16).padStart(2, "0")).join("");
+  type Ev =
+    | { type: "game_start" }
+    | { type: "game_over"; score: number; duration_s: number }
+    | { type: "game_error"; message: string }
+    | { type: "frame_sample"; p95_frame_ms: number; long_frames: number };
+  function send(ev: Ev) {
+    const body = JSON.stringify({ ...ev, session });
+    try {
+      if (navigator.sendBeacon?.("/api/rum", new Blob([body], { type: "text/plain" }))) return;
+    } catch {}
+    fetch("/api/rum", { method: "POST", body, keepalive: true, headers: { "content-type": "text/plain" } }).catch(() => {});
+  }
+  let errorsSent = 0;
+  function reportError(message: string) {
+    if (errorsSent++ >= 3) return; // a broken loop must not flood the endpoint
+    send({ type: "game_error", message: message.slice(0, 120) });
+  }
+  window.addEventListener("error", (e) => {
+    const where = e.filename ? ` (${e.filename.split("/").pop()}:${e.lineno})` : "";
+    reportError(`${e.message || "Script error"}${where}`);
+  });
+  window.addEventListener("unhandledrejection", (e) => reportError(`Unhandled rejection: ${String(e.reason)}`));
+
+  // ---------- game ----------
+  const canvas = document.querySelector<HTMLCanvasElement>("canvas[data-game]")!;
+  const statusEl = document.querySelector<HTMLElement>("[data-status]")!;
+  const resultEl = document.querySelector<HTMLElement>("[data-result]")!;
+  const ctx = canvas.getContext("2d")!;
+  const W = 640, H = 200, GROUND = 170;
+  const debug = new URLSearchParams(location.search).get("debug") === "1";
+
+  const css = (name: string, fallback: string) => getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
+  const colors = () => ({ fg: css("--fg", "#1b1b1a"), muted: css("--muted", "#5d5d58"), bad: css("--bad", "#b83a3a"), accent: css("--accent", "#1f5f8b") });
+  let palette = colors();
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => (palette = colors()));
+
+  function fit() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = W * dpr;
+    canvas.height = H * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  fit();
+  window.addEventListener("resize", fit);
+
+  type State = "ready" | "running" | "over" | "paused";
+  type Obstacle = { x: number; y: number; w: number; h: number };
+  const STEP = 1 / 120; // fixed physics step (s)
+  const player = { x: 64, y: GROUND, vy: 0, w: 22, standH: 34, duckH: 18, ducking: false };
+  let state: State = "ready";
+  let obstacles: Obstacle[] = [];
+  let speed = 300, distance = 0, runTime = 0, nextGap = 400, best = 0, overAt = 0;
+
+  const ph = () => (player.ducking && player.y >= GROUND ? player.duckH : player.standH);
+  const score = () => Math.floor(distance / 10);
+  const setStatus = (s: string) => {
+    statusEl.textContent = s;
+    canvas.setAttribute("aria-label", `Pulse run game. ${s}`);
+  };
+
+  function reset() {
+    obstacles = [];
+    speed = 300; distance = 0; runTime = 0; nextGap = 420;
+    player.y = GROUND; player.vy = 0; player.ducking = false;
+  }
+
+  function start() {
+    // Game-day switch: set at the edge by the Worker only when FAULT=game_js_error is deployed.
+    if (canvas.dataset.fault === "game_js_error") throw new Error("Injected fault: game_js_error");
+    reset();
+    state = "running";
+    resetFrames();
+    runFrames = [];
+    resultEl.hidden = true;
+    send({ type: "game_start" });
+    setStatus("Go!");
+  }
+
+  function gameOver() {
+    state = "over";
+    overAt = performance.now();
+    flushFrames();
+    const s = score();
+    best = Math.max(best, s);
+    send({ type: "game_over", score: s, duration_s: Math.round(runTime * 10) / 10 });
+    setStatus(`Game over. Score ${s}. Best this visit ${best}. Press Space or tap to run again.`);
+    showResult();
+  }
+
+  // The visitor's own run, summarised here in the browser (ADR-019). Plain DOM, never innerHTML.
+  function showResult() {
+    if (runFrames.length < 10) return;
+    const sorted = [...runFrames].sort((a, b) => a - b);
+    const p95 = sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.95))] ?? 0;
+    const stutters = runFrames.filter((f) => f > 50).length;
+    const feel = stutters === 0 ? (p95 <= 20 ? "smooth" : "mostly smooth") : `${stutters} stutter${stutters === 1 ? "" : "s"} over 50 ms`;
+    resultEl.textContent = `Your run was sent to Live reliability: ${feel} (95% of frames in ${p95.toFixed(1)} ms or less). `;
+    const link = document.createElement("a");
+    link.href = "/reliability/#client-path";
+    link.textContent = "See it →";
+    resultEl.append(link);
+    resultEl.hidden = false;
+  }
+
+  function jump() {
+    if (player.y >= GROUND) player.vy = -560;
+  }
+
+  function spawn() {
+    const high = score() > 150 && Math.random() < 0.35;
+    if (high) {
+      // A bar you must duck under: its bottom sits above a ducking runner, below a standing one.
+      obstacles.push({ x: W + 10, y: GROUND - 24 - 16, w: 30, h: 16 });
+    } else {
+      const h = 22 + Math.random() * 18;
+      obstacles.push({ x: W + 10, y: GROUND - h, w: 16 + Math.random() * 12, h });
+    }
+    nextGap = (260 + Math.random() * 260) * (speed / 300);
+  }
+
+  function update(dt: number) {
+    runTime += dt;
+    speed = Math.min(700, 300 + runTime * 12);
+    distance += speed * dt;
+    player.vy += (player.ducking && player.y < GROUND ? 3600 : 1800) * dt; // ducking in the air drops faster
+    player.y = Math.min(GROUND, player.y + player.vy * dt);
+    if (player.y >= GROUND) player.vy = 0;
+    for (const o of obstacles) o.x -= speed * dt;
+    obstacles = obstacles.filter((o) => o.x + o.w > -10);
+    const last = obstacles[obstacles.length - 1];
+    if (!last || W - (last.x + last.w) >= nextGap) spawn();
+    const h = ph(), inset = 3;
+    const px1 = player.x + inset, px2 = player.x + player.w - inset, py1 = player.y - h + inset, py2 = player.y - inset;
+    for (const o of obstacles) {
+      if (px2 > o.x && px1 < o.x + o.w && py2 > o.y && py1 < o.y + o.h) return gameOver();
+    }
+  }
+
+  function draw() {
+    const c = palette;
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = c.muted;
+    ctx.fillRect(0, GROUND, W, 1);
+    // A heartbeat trace along the ground: the site's theme, drawn cheaply.
+    ctx.strokeStyle = c.muted;
+    ctx.globalAlpha = 0.35;
+    ctx.beginPath();
+    const off = distance % 160;
+    for (let x = -off; x < W; x += 160) {
+      ctx.moveTo(x, GROUND + 14); ctx.lineTo(x + 60, GROUND + 14); ctx.lineTo(x + 70, GROUND + 4);
+      ctx.lineTo(x + 80, GROUND + 22); ctx.lineTo(x + 90, GROUND + 14); ctx.lineTo(x + 160, GROUND + 14);
+    }
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = c.bad;
+    for (const o of obstacles) ctx.fillRect(o.x, o.y, o.w, o.h);
+    ctx.fillStyle = c.fg;
+    const h = ph();
+    ctx.fillRect(player.x, player.y - h, player.w, h);
+    ctx.font = "600 14px system-ui, sans-serif";
+    ctx.textAlign = "right";
+    ctx.fillText(String(score()).padStart(5, "0"), W - 12, 22);
+    ctx.textAlign = "center";
+    if (state === "ready") ctx.fillText("Press Space or tap to start", W / 2, 90);
+    if (state === "paused") ctx.fillText("Paused. Press Space or tap to continue", W / 2, 90);
+    if (state === "over") ctx.fillText(`Game over: ${score()}. Space or tap to run again`, W / 2, 90);
+    if (debug) {
+      ctx.textAlign = "left";
+      ctx.font = "12px ui-monospace, monospace";
+      ctx.fillStyle = c.accent;
+      ctx.fillText(`fps ${fps.toFixed(0)} · p95 ${lastP95.toFixed(1)} ms · long ${lastLong}`, 10, 18);
+    }
+  }
+
+  // ---------- frame timing: p95 and long frames every 5 s of play ----------
+  let frames: number[] = [], runFrames: number[] = [], sampleStart = 0, fps = 0, lastP95 = 0, lastLong = 0;
+  function resetFrames() { frames = []; sampleStart = performance.now(); }
+  function flushFrames() {
+    if (frames.length < 10) return resetFrames();
+    const sorted = [...frames].sort((a, b) => a - b);
+    lastP95 = sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.95))] ?? 0;
+    lastLong = frames.filter((f) => f > 50).length;
+    send({ type: "frame_sample", p95_frame_ms: Math.round(lastP95 * 10) / 10, long_frames: lastLong });
+    resetFrames();
+  }
+
+  // ---------- loop ----------
+  let last = performance.now(), acc = 0;
+  function loop(now: number) {
+    const frame = now - last;
+    last = now;
+    if (state === "running") {
+      frames.push(frame);
+      runFrames.push(frame);
+      fps = fps ? fps * 0.9 + (1000 / Math.max(frame, 1)) * 0.1 : 60;
+      acc += Math.min(frame / 1000, 0.1); // clamp so a stall cannot teleport the runner
+      while (acc >= STEP && state === "running") { update(STEP); acc -= STEP; }
+      if (now - sampleStart >= 5000) flushFrames();
+    } else acc = 0;
+    draw();
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame((t) => { last = t; loop(t); });
+
+  // Hidden tabs throttle rAF: pause and drop that window so it is never counted as jank.
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden && state === "running") { state = "paused"; frames = []; setStatus("Paused."); }
+  });
+
+  // ---------- input ----------
+  function primary() {
+    if (state === "ready") return start();
+    if (state === "over") { if (performance.now() - overAt > 400) start(); return; }
+    if (state === "paused") { state = "running"; resetFrames(); last = performance.now(); setStatus("Go!"); return; }
+    jump();
+  }
+  window.addEventListener("keydown", (e) => {
+    if (e.code === "Space" || e.code === "ArrowUp" || e.code === "KeyW") { e.preventDefault(); if (!e.repeat) primary(); }
+    else if (e.code === "ArrowDown" || e.code === "KeyS") { e.preventDefault(); player.ducking = true; }
+  });
+  window.addEventListener("keyup", (e) => {
+    if (e.code === "ArrowDown" || e.code === "KeyS") player.ducking = false;
+  });
+  let touchY: number | null = null;
+  canvas.addEventListener("pointerdown", (e) => { touchY = e.clientY; canvas.focus(); primary(); });
+  canvas.addEventListener("pointermove", (e) => { if (touchY !== null && e.clientY - touchY > 24) player.ducking = true; });
+  const release = () => { touchY = null; player.ducking = false; };
+  canvas.addEventListener("pointerup", release);
+  canvas.addEventListener("pointercancel", release);
+
+  setStatus("Press Space or tap to start.");
+</script>

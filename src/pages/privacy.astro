@@ -1,0 +1,25 @@
+---
+import Base from "../layouts/Base.astro";
+---
+
+<Base title="Privacy · vikrantsingh.fyi">
+  <h1>Privacy</h1>
+  <p>This site sets no cookies and runs no ad or tracking scripts.</p>
+  <p>
+    The site's own logs record one line per request: time, page path, status, duration and outcome. They do not
+    record your IP address or browser details, and the site has no forms that ask for personal information.
+    Cloudflare, which hosts the site, handles your IP address to deliver the page, under its own privacy policy.
+  </p>
+  <p>
+    The site keeps one running total of page views. It is a single number; nothing about you or your visit is
+    stored with it.
+  </p>
+  <p>
+    If you play <a href="/play/">Pulse run</a>, the game sends anonymous events to this site: when a run starts and
+    ends, the score, script errors, and frame timings. They are tied to a random ID made fresh on each page load and
+    are not stored with your IP address, browser details or any cookie. They appear only as totals on
+    <a href="/reliability/">Live reliability</a>.
+  </p>
+  <p>If you email me, I keep that conversation in my own inbox like any other email.</p>
+  <!-- TODO (P0b): name the cookieless analytics once enabled. If a contact form ever returns (P3), add its purpose and 90-day retention here first. -->
+</Base>

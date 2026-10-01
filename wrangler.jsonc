@@ -1,0 +1,61 @@
+// Site Worker. One deploy unit (ADR-002). The lab is a separate Worker added in P2+.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "vikrantsingh-fyi",
+  "main": "worker/index.ts",
+  "compatibility_date": "2026-09-01",
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    // Every request hits the Worker first: www → apex redirect, pulse injection on HTML, /api/*.
+    // Non-HTML assets pass straight through servePage untouched.
+    "run_worker_first": true
+  },
+  // P0b: apex is canonical; www redirects to it in worker/index.ts. The zone is already on Cloudflare DNS.
+  // Custom domains create their own DNS records and certificates. Needs zone permissions on the deploy token.
+  "routes": [
+    { "pattern": "vikrantsingh.fyi", "custom_domain": true },
+    { "pattern": "www.vikrantsingh.fyi", "custom_domain": true }
+  ],
+  // Keep the workers.dev URL as a fallback while the domain settles. Turn off once P0b's gate is met.
+  "workers_dev": true,
+  // Local `wrangler dev` would otherwise present requests as http://vikrantsingh.fyi and trip the https redirect.
+  "dev": { "host": "localhost" },
+
+  // ── Heartbeat (ADR-010), on since 30 Sep 2026 to start the 30-day SLO clock. ──
+  // Removing PULSE turns it off again: pages fall back to the static footer, /api/pulse returns 503 "disabled".
+  "triggers": { "crons": ["*/10 * * * *"] }, // ~4,320 runs a month
+  "kv_namespaces": [{ "binding": "PULSE", "id": "388bb9d90cf240218eb235bff1f26678" }],
+  // SLI events, independent of KV, kept long enough for a 30-day window (docs/slo.md).
+  // Off until Analytics Engine is enabled once in the Cloudflare dashboard (deploy fails with code 10089 otherwise).
+  // "analytics_engine_datasets": [{ "binding": "SLI", "dataset": "site_sli" }],
+  // Page-view counter (ADR-011). One Durable Object holds the site-wide total; SQLite-backed works on the free plan.
+  // SLI ledger (ADR-012): our own long-term SLI store; failures in full, successes counted. Read at /api/slo.
+  "durable_objects": {
+    "bindings": [
+      { "name": "VISITS", "class_name": "VisitCounter" },
+      { "name": "LEDGER", "class_name": "SliLedger" }
+    ]
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["VisitCounter"] },
+    { "tag": "v2", "new_sqlite_classes": ["SliLedger"] }
+  ],
+  "vars": {
+    // Game-day switch. Changed only by a deploy, never by a request (ADR-010).
+    "FAULT": "none",
+    // Counter flag: "off" = count silently, "auto" = show once total >= threshold, "on" = always show.
+    "VISITS_MODE": "auto",
+    "VISITS_THRESHOLD": "1000",
+    // Reliability dashboard at /reliability/ (ADR-013): "off" | "auto" (once 30 days of data) | "on".
+    // "on" at Vikrant's request 30 Sep 2026 to review it live before publicising; switch to "auto" or "off" if needed.
+    "DASHBOARD_MODE": "on",
+    "GITHUB_REPO": "vikiscoding/vikrant-personal-website",
+    // Incident desk (ADR-016). Secret INCIDENTS_DISPATCH_TOKEN is set in the Cloudflare dashboard, never via a `!` prompt.
+    "INCIDENTS_REPO": "vikiscoding/vikrant_perswebsite_incidents_aiengine"
+  },
+  // Secret, not a var: `npx wrangler secret put GITHUB_TOKEN` (fine-grained, read-only, this repo only).
+  // invocation_logs off: Cloudflare's automatic per-request logs include the visitor's IP and all headers,
+  // which /privacy says we do not keep. Only our own structured lines (worker/log.ts, no IP) are logged.
+  "observability": { "enabled": true, "head_sampling_rate": 1, "logs": { "enabled": true, "invocation_logs": false } }
+}

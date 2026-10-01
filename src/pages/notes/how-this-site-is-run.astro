@@ -1,0 +1,35 @@
+---
+// Public-facing version of docs/slo.md.
+// Present tense since 30 Sep 2026 (heartbeat + probe live). Game day 1 postmortem linked 1 Oct 2026. After 30 Oct 2026: add SLO numbers.
+import Base from "../../layouts/Base.astro";
+---
+
+<Base title="How this site is run · vikrantsingh.fyi">
+  <h1>How this site is run</h1>
+  <p>
+    A static page on a CDN almost never goes down, so an uptime number for it proves nothing. This site has one small
+    dynamic path, so there is something real to operate.
+  </p>
+  <p>How it works:</p>
+  <ul>
+    <li>A scheduled job checks this site's latest commit and build status every 10 minutes and stores a snapshot.</li>
+    <li>Every page reads that snapshot into the footer. If the read fails, the page still serves without it.</li>
+    <li>An external probe checks every 5 minutes that the snapshot is fresh. Two service level objectives sit on those results.</li>
+    <li>I break it on purpose, restore it, and write down what I learned. <a href="/notes/postmortem-game-day-1/">Postmortem: game day 1</a> (1 October 2026).</li>
+  </ul>
+  <p>Status: the heartbeat and the external probe have been running since 30 September 2026. The first 30-day SLO numbers come after that window closes.</p>
+  <p><a href="/reliability/">See the live reliability dashboard →</a></p>
+
+  <h2>How it's built</h2>
+  <p>
+    Astro static pages served by one Cloudflare Worker, which also runs the scheduled job, the probe endpoint, an SLI
+    ledger in a Durable Object, and the dashboard. Incidents go to a separate engine that runs on GitHub Actions, with
+    GitHub Issues as the human gate. Both are public, with every decision written down.
+  </p>
+  <ul>
+    <li><a href="https://github.com/vikiscoding/vikrant-personal-website">This site's code</a> (Astro, TypeScript, Cloudflare Workers)</li>
+    <li><a href="https://github.com/vikiscoding/vikrant-personal-website/blob/main/docs/adr/README.md">Decision records</a>, each with the option it rejected</li>
+    <li><a href="https://github.com/vikiscoding/vikrant-personal-website/blob/main/docs/gamedays/2026-10-01-github_5xx.md">Game day 1, the raw record</a> behind the <a href="/notes/postmortem-game-day-1/">postmortem</a></li>
+    <li><a href="https://github.com/vikiscoding/vikrant_perswebsite_incidents_aiengine">The incident engine's code</a> (Python, GitHub Actions)</li>
+  </ul>
+</Base>
