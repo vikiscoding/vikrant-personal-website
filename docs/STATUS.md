@@ -24,6 +24,7 @@ Last updated: 1 Oct 2026.
 - Game day 1 (1 Oct 2026, `FAULT=github_5xx`): the alert was raised by the site, triaged by the engine, worked through the human gate, and recovery was reported automatically. Eight findings, six fixed. Record: `docs/gamedays/2026-10-01-github_5xx.md`; public postmortem: `/notes/postmortem-game-day-1/`.
 - Endpoint validation for `/api/rum` (origin, size, type, bounds), scripted playthroughs, the `game_js_error` game day, degrade-open behaviour, the Toronto-time boundaries across DST.
 - Live desk policy: the engine's live workflow runs with `TRIAGE_AUTO_APPLY=off`, so a confident Low still waits for `/approve` (engine test `test_live_desk_never_auto_applies_even_low`, ADR-021).
+- Desk records keep the rule they ran under (ADR-025): the one pre-ADR-021 ticket reads "auto-applied under the earlier low-risk rule"; the owner's latest `/note` shows on each ticket (issue #2 says game day 1's alert landed there).
 - Homepage copy: every figure traced to the résumé or Vikrant's confirmation before publishing (ADR-022).
 
 ## Pending
