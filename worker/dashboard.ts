@@ -251,7 +251,7 @@ function incidentDesk(feed: Feed | null): string {
     <h2>Incident desk</h2>
     <p class="dash-small dash-muted">Real failures of this site go to an incident triage agent. It proposes priority and drafts updates; a human runs every step after that, in public GitHub issues.</p>
     ${list}
-    <p class="dash-small dash-muted">Real alerts from this site only. AI drafts are never sent. After intake, every state change is a human command.${
+    <p class="dash-small dash-muted">Real alerts from this site only. AI drafts are never sent, and every AI priority waits for a human approval. AI priority never pages anyone: paging comes from the outside probe on this site's SLO. After intake, every state change is a human command.${
       repo ? ` <a href="${repo}">Engine repo →</a>` : ""
     }</p>
   </section>`;

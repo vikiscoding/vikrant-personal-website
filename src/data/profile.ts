@@ -93,7 +93,7 @@ export const profile = {
       name: "Incident-AI",
       summary:
         "Incident triage where the AI drafts and a human authorizes. Folder is the ticket. If the model is down, the path still works.",
-      bound: "Python demo, not ServiceNow and not a bank stack.",
+      bound: "Python on GitHub Actions, handling one small site's real incidents. Not ServiceNow.",
       link: { label: "Watch the walk (~14 min)", href: "https://youtu.be/j048FYXrRqs" },
       page: "/exhibits/incident-ai/",
       chip: "Live",
@@ -115,7 +115,7 @@ export const profile = {
       slug: "pulse-run",
       name: "Pulse run",
       summary: "Tiny browser runner used as a client perf and error-budget testbed on this same site.",
-      bound: "A 30-second toy, not a product and not a bank stack.",
+      bound: "A 30-second toy, not a product.",
       link: { label: "Play 30 seconds →", href: "/play/" },
       page: "/play/",
       chip: "Playable",
