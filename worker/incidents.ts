@@ -24,6 +24,8 @@ export interface FeedIncident {
   updated_at: string;
   triage: { priority: string; confidence: number; reasoning: string } | null;
   gate: string;
+  /** The owner's latest /note (engine feed), e.g. context a reader of the desk alone would miss. */
+  note?: string | null;
   drafts_unsent: number;
   recovered_at: string | null;
   issue_url: string | null;

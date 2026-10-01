@@ -216,6 +216,11 @@ function clientPath(win: SloWindow): string {
 const OPEN = new Set(["DETECTED", "TRIAGING", "ACKNOWLEDGED", "ACTIVE"]);
 
 /** "service raised it → AI → human: ACKNOWLEDGED → ACTIVE → …": who did what, from the engine's own timeline. */
+/** The owner's note, escaped; only links back to this site become clickable. */
+function ownerNote(note: string): string {
+  return esc(note).replace(/https:\/\/vikrantsingh\.fyi\/[\w\-./#]*/g, (u) => `<a href="${u}">${u.replace("https://vikrantsingh.fyi", "")}</a>`);
+}
+
 function trail(i: FeedIncident): string {
   const steps: string[] = [];
   if (i.timeline.some((e) => e.kind === "service")) steps.push("site raised it");
@@ -242,6 +247,7 @@ function incidentDesk(feed: Feed | null): string {
             <p class="dash-small dash-muted">Opened ${esc(localStamp(i.created_at))} · ${proposal} · gate: ${esc(i.gate)}${
               i.drafts_unsent ? ` · ${n(i.drafts_unsent)} draft${i.drafts_unsent === 1 ? "" : "s"}, never sent` : ""
             }${i.recovered_at ? ` · site recovered ${esc(localStamp(i.recovered_at))}` : ""}</p>
+            ${i.note ? `<p class="dash-small">Owner's note: ${ownerNote(i.note)}</p>` : ""}
             <p class="dash-small">${esc(trail(i))}</p>
           </li>`;
         })
