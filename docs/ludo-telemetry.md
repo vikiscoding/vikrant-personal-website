@@ -100,7 +100,7 @@ Load test on the dev Worker (40 four-player rooms, 160 sockets, 60 s, scripted p
 | Errors | 0 | 0 |
 | Every action in the ledger | yes | yes |
 
-Not yet tested: the load at which a single room or the ledger saturates; that needs a larger load test (and an account plan that allows it). Every deploy restarts Durable Objects and drops live sockets; the page reconnects and the game resumes from storage.
+Not tested on purpose: the load at which a single room or the ledger saturates. The account is on Cloudflare's Free plan, whose daily Durable Object limit is shared with production, so a test of a few hundred rooms could take the live site's ledger, counter and Ludo down until the daily reset. Run it only on a paid plan, as a game day. Every deploy restarts Durable Objects and drops live sockets; the page reconnects and the game resumes from storage.
 
 ## Game rules worth knowing
 

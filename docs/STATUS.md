@@ -16,7 +16,7 @@ Last updated: 2 Oct 2026.
 | Dashboard | `/reliability/` (flag `DASHBOARD_MODE=on`): summary, live state with Degraded when the latest run failed, SLO cards, 30-day strip, speed, failures, incident desk, client path |
 | Incident desk | 2 failed runs → `repository_dispatch` to the incident engine; owner `/commands` on GitHub Issues are the human gate; since 1 Oct 2026 every AI priority waits for `/approve` (ADR-021); the site reads the engine's public `feed.json` (refreshed by the scheduled job, so up to 10 min behind), showing each ticket's gate with the rule it ran under and the owner's latest `/note` (ADR-025) |
 | Pulse run | `/play/`: validated `POST /api/rum`, no IP, user agent or cookie; personal result at game over |
-| Ludo | `/ludo/` (ADR-026): one Durable Object per room over WebSockets; solo vs bots or up to four players on an invite link; names and room chat in any language, kept only in the room; server-measured SLIs `ludo_connect`, `ludo_action`, `ludo_rtt` (+ lobby, turn, game) on `/reliability/#ludo`. Linked from the homepage reliability item and `/play/`. Dev Worker `vikrantsingh-fyi-dev` (`wrangler deploy --env dev`) for trying branches |
+| Ludo | `/ludo/` (ADR-026): one Durable Object per room over WebSockets; solo vs bots or up to four players on an invite link; names and room chat in any language, kept only in the room; server-measured SLIs `ludo_connect`, `ludo_action`, `ludo_rtt` (+ lobby, turn, game) on `/reliability/#ludo`. Linked from the homepage reliability item and `/play/`. Rooms batch telemetry to the ledger and append moves as rows (ADR-027; dev load test at 40 rooms: p99 240 to 80 ms). Games run to last place; any player can leave, and an empty room stops. Dev Worker `vikrantsingh-fyi-dev` (`wrangler deploy --env dev`) for trying branches |
 | Visit counter | Counting, hidden until 1,000 views (`VISITS_MODE=auto`) |
 | Brand | Favicon set and 1200×630 share image from `scripts/make-brand-assets.py` (reads the headline); `og:image` URL is versioned by the headline so caches never serve a stale card |
 
@@ -32,6 +32,7 @@ Last updated: 2 Oct 2026.
 
 - Game day 2 (2 Oct 2026, `FAULT=github_5xx`, held until the outside monitor went Down, then restored and worked through the gate on incident #3): write its record in `docs/gamedays/` from the template, including whether the alert reached the owner.
 - Cloudflare CI token expiry is still `TODO` in `docs/runbook.md`.
+- Cloudflare account is on the Free plan: the daily Durable Object limit is shared by production and the dev Worker, so heavy tests on dev can affect the live site. No load tests beyond ~40 rooms until a paid plan.
 - Alert channel: the alert mailbox is near capacity (game day 1, finding 7; owner: site owner).
 - See [`ROADMAP.md`](ROADMAP.md) → Next.
 
