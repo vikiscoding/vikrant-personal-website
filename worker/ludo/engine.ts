@@ -144,6 +144,53 @@ export function autoAction(g: Game): [Action, Game] {
   return [{ seat: g.turn, kind: "move", token, auto: true }, { ...g, rng }];
 }
 
+/** How many opponent tokens could land on `square` with one die (1–6 squares behind it on the shared track). */
+function threats(g: Game, seat: number, square: number): number {
+  if (SAFE.has(square)) return 0;
+  let n = 0;
+  g.tokens.forEach((list, s) => {
+    if (s === seat || g.seats[s] === "empty") return;
+    for (const p of list) {
+      if (p < 0 || p > 50) continue;
+      const gap = (square - absolute(s, p) + TRACK) % TRACK;
+      if (gap >= 1 && gap <= 6) n++;
+    }
+  });
+  return n;
+}
+
+/** The move a sensible player makes for an idle human: no randomness, so replays stay exact.
+ * Priority: finish a token, capture, leave the yard, reach the home column or a safe square, escape danger, then progress. */
+export function bestMove(g: Game): number {
+  if (g.phase !== "move" || g.die === null || g.legal.length === 0) throw new Error("not_move_phase");
+  const seat = g.turn;
+  const die = g.die;
+  let best = g.legal[0]!;
+  let bestScore = -Infinity;
+  for (const i of g.legal) {
+    const from = g.tokens[seat]![i]!;
+    const to = from === -1 ? 0 : from + die;
+    let score = to / 10; // progress as the tie-breaker
+    if (to === HOME) score += 100;
+    if (from === -1) score += 60;
+    if (to <= 50) {
+      const sq = absolute(seat, to);
+      const captures = !SAFE.has(sq) && g.tokens.some((list, s) => s !== seat && list.some((p) => p >= 0 && p <= 50 && absolute(s, p) === sq));
+      if (captures) score += 80;
+      if (SAFE.has(sq)) score += 20;
+      score -= 30 * threats(g, seat, sq);
+    } else if (from <= 50) {
+      score += 40; // into the home column: safe for good
+    }
+    if (from >= 0 && from <= 50) score += 25 * threats(g, seat, absolute(seat, from)); // escaping danger
+    if (score > bestScore) {
+      bestScore = score;
+      best = i;
+    }
+  }
+  return best;
+}
+
 /** Rebuild a game from its seed, seats and action log: the determinism check. */
 export function replay(seed: number, seats: SeatKind[], log: Action[]): Game {
   let g = start(newGame(seed, seats));

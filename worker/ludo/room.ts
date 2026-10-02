@@ -7,11 +7,12 @@ import type { Env } from "../env";
 import { activeFault } from "../faults";
 import { record, type SliEvent } from "../log";
 import { detail } from "./telemetry";
-import { apply, autoAction, newGame, SEATS, start, type Action, type Game, type SeatKind } from "./engine";
+import { apply, autoAction, bestMove, newGame, SEATS, start, type Action, type Game, type SeatKind } from "./engine";
 
 /** Pacing and patience budgets (docs/ludo-telemetry.md). */
 export const BOT_STEP_MS = 700;
-export const HUMAN_TURN_MS = 30_000;
+/** Each prompt (roll, then move) gives a human this long; then the server acts for them, sensibly, and play goes on. */
+export const HUMAN_PROMPT_MS = 15_000;
 export const ACTION_GOOD_MS = 100;
 export const RTT_GOOD_MS = 300;
 export const BOT_LAG_GOOD_MS = 250;
@@ -22,6 +23,14 @@ const MAX_SOCKETS = 8;
 const RATE_WINDOW_MS = 10_000;
 const RATE_MAX = 40;
 const KEY = /^[a-f0-9]{16}$/;
+/** Display names: optional, 1–16 letters, digits, spaces and - _ . ' only. Kept in the room, never in telemetry. */
+const NAME = /^[\p{L}\p{N}][\p{L}\p{N} _.'-]{0,15}$/u;
+
+export function cleanName(v: unknown): string | null {
+  if (typeof v !== "string") return null;
+  const s = v.normalize("NFC").replace(/\s+/g, " ").trim();
+  return NAME.test(s) ? s : null;
+}
 
 interface Meta {
   mode: "solo" | "code";
@@ -33,6 +42,8 @@ interface Meta {
   promptAt?: number;
   due: number | null;
   ended: boolean;
+  /** Optional display names per seat; cleared when the last player leaves. */
+  names?: (string | null)[];
 }
 
 interface Attachment {
@@ -46,7 +57,8 @@ type Inbound =
   | { t: "move"; token: number }
   | { t: "start" }
   | { t: "ping" }
-  | { t: "echo"; s: number };
+  | { t: "echo"; s: number }
+  | { t: "name"; name: string | null };
 
 function parse(raw: string | ArrayBuffer): Inbound | null {
   if (typeof raw !== "string" || raw.length > MAX_MSG_BYTES) return null;
@@ -65,6 +77,11 @@ function parse(raw: string | ArrayBuffer): Inbound | null {
       return { t: o.t };
     case "move":
       return Number.isInteger(o.token) && (o.token as number) >= 0 && (o.token as number) < 4 ? { t: "move", token: o.token as number } : null;
+    case "name": {
+      if (o.name === null || o.name === "") return { t: "name", name: null };
+      const name = cleanName(o.name);
+      return name ? { t: "name", name } : null;
+    }
     case "echo":
       return typeof o.s === "number" && Number.isFinite(o.s) ? { t: "echo", s: o.s } : null;
     default:
@@ -134,7 +151,7 @@ export class LudoRoom extends DurableObject<Env> {
       const humans = g.seats.filter((k) => k === "human").length;
       if (m.mode === "solo" || humans === SEATS) this.begin(now);
     } else if (!m.ended && g.phase !== "over") {
-      m.turnStartedAt = now; // a returning player gets a fresh turn clock
+      m.promptAt = now; // a returning player gets a fresh clock
     }
     await this.save();
     await this.schedule();
@@ -178,6 +195,16 @@ export class LudoRoom extends DurableObject<Env> {
     if (!msg) return this.send(ws, { t: "err", code: "bad_message" });
 
     if (msg.t === "ping") return this.send(ws, { t: "probe", s: t0 });
+    if (msg.t === "name") {
+      await this.load();
+      if (!this.meta) return;
+      const names = this.meta.names ?? [null, null, null, null];
+      names[att.seat] = msg.name;
+      this.meta.names = names;
+      await this.ctx.storage.put("meta", this.meta);
+      this.broadcast();
+      return;
+    }
     if (msg.t === "echo") {
       const rtt = t0 - msg.s;
       if (rtt >= 0 && rtt <= 60_000) {
@@ -264,7 +291,7 @@ export class LudoRoom extends DurableObject<Env> {
       await this.ctx.storage.deleteAlarm();
       return;
     }
-    const due = g.seats[g.turn] === "bot" ? Date.now() + BOT_STEP_MS : m.turnStartedAt + HUMAN_TURN_MS;
+    const due = g.seats[g.turn] === "bot" ? Date.now() + BOT_STEP_MS : (m.promptAt ?? m.turnStartedAt) + HUMAN_PROMPT_MS;
     m.due = due;
     await this.ctx.storage.put("meta", m);
     await this.ctx.storage.setAlarm(due);
@@ -278,10 +305,20 @@ export class LudoRoom extends DurableObject<Env> {
     if (!g || !m || g.phase === "lobby" || g.phase === "over") return;
     const lag = m.due === null ? 0 : Math.max(0, t0 - m.due);
     const isBot = g.seats[g.turn] === "bot";
-    if (!isBot && t0 < m.turnStartedAt + HUMAN_TURN_MS) return this.schedule();
+    const promptAt = m.promptAt ?? m.turnStartedAt;
+    if (!isBot && t0 < promptAt + HUMAN_PROMPT_MS) return this.schedule();
 
-    const [action, drawn] = autoAction(g);
-    this.game = this.step(drawn, action);
+    // Bots play a seeded random legal move (the original spec). An idle human gets the best move instead:
+    // the game keeps going for as long as their tab stays connected, and they would rather not be played badly.
+    let action: Action;
+    if (isBot) {
+      const [a, drawn] = autoAction(g);
+      action = a;
+      this.game = this.step(drawn, a);
+    } else {
+      action = g.phase === "roll" ? { seat: g.turn, kind: "roll" } : { seat: g.turn, kind: "move", token: bestMove(g) };
+      this.game = this.step(g, action);
+    }
     await this.save();
     await this.schedule();
     this.broadcast();
@@ -290,7 +327,7 @@ export class LudoRoom extends DurableObject<Env> {
       this.rec({ op: "ludo_action", outcome: ms <= BOT_LAG_GOOD_MS ? "ok" : "degraded", status: 200, ms, detail: detail({ mode: m.mode, actor: "bot", kind: action.kind, lag }) });
     } else {
       // A human ran out of patience or left: an engagement signal, not a server fault.
-      this.rec({ op: "ludo_turn", outcome: "degraded", status: 200, ms: HUMAN_TURN_MS, detail: detail({ mode: m.mode, result: "timeout", kind: action.kind }) });
+      this.rec({ op: "ludo_turn", outcome: "degraded", status: 200, ms: t0 - promptAt, detail: detail({ mode: m.mode, result: "timeout", kind: action.kind }) });
     }
   }
 
@@ -314,6 +351,7 @@ export class LudoRoom extends DurableObject<Env> {
       });
     }
     m.due = null;
+    m.names = [null, null, null, null]; // names live only while someone is in the room
     await this.ctx.storage.deleteAlarm();
     await this.save();
   }
@@ -341,11 +379,12 @@ export class LudoRoom extends DurableObject<Env> {
       die: g.die,
       legal: g.legal,
       winner: g.winner,
+      names: m.names ?? [null, null, null, null],
       rolls: g.rolls ?? [[], [], [], []],
       lastRoller: lastRoller(g),
       moves: g.log.length,
       mode: m.mode,
-      turnEndsAt: g.seats[g.turn] === "human" && g.phase !== "over" && g.phase !== "lobby" ? m.turnStartedAt + HUMAN_TURN_MS : null,
+      turnEndsAt: g.seats[g.turn] === "human" && g.phase !== "over" && g.phase !== "lobby" ? (m.promptAt ?? m.turnStartedAt) + HUMAN_PROMPT_MS : null,
     };
     for (const ws of this.ctx.getWebSockets()) {
       const { seat } = ws.deserializeAttachment() as Attachment;

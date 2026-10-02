@@ -13,6 +13,7 @@ import Base from "../layouts/Base.astro";
   </p>
 
   <div class="controls" data-setup>
+    <input data-name maxlength="16" placeholder="Your name (optional)" aria-label="Your name, optional, shown to the other players" autocomplete="nickname" />
     <button type="button" data-solo>Play solo</button>
     <span class="or">or</span>
     <input data-code maxlength="6" placeholder="CODE" aria-label="Room code" autocomplete="off" spellcheck="false" />
@@ -23,6 +24,7 @@ import Base from "../layouts/Base.astro";
   <div class="table" data-table hidden>
     <canvas data-board aria-label="Ludo board"></canvas>
     <div class="side">
+      <p class="you" data-you hidden></p>
       <p class="status" aria-live="polite" data-status>Connecting…</p>
       <div class="dice-row">
         <button type="button" class="die" data-die data-face="0" aria-label="Roll the die" disabled>
@@ -45,7 +47,8 @@ import Base from "../layouts/Base.astro";
   </div>
 
   <p class="note">
-    Sent: your rolls and moves, and a timing ping every 15 seconds. Stored: timings and game outcomes, with no name, IP
+    Sent: your rolls and moves, a timing ping every 15 seconds, and the name you type, if any (shown only to players in
+    your room and cleared when the room empties). Stored as telemetry: timings and game outcomes, with no name, IP
     address or cookie. <a href="/privacy/">Privacy</a>
   </p>
   <p class="muted bound">Scope: a latency testbed with Ludo rules, not a product.</p>
@@ -53,6 +56,7 @@ import Base from "../layouts/Base.astro";
 
 <style>
   .controls { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin: 1.5rem 0; }
+  .controls input[data-name] { width: 12rem; text-transform: none; }
   .controls input { width: 6.5rem; text-transform: uppercase; font: inherit; padding: 0.35rem 0.5rem; }
   .or { color: var(--muted); }
   button { font: inherit; padding: 0.4rem 0.9rem; cursor: pointer; }
@@ -63,6 +67,8 @@ import Base from "../layouts/Base.astro";
     width: min(62rem, calc(100vw - 2rem)); position: relative; left: 50%; transform: translateX(-50%);
   }
   canvas { width: 100%; aspect-ratio: 1; border: 1px solid var(--line); border-radius: 6px; cursor: pointer; touch-action: manipulation; display: block; }
+  .you { margin: 0 0 0.5rem; font-weight: 700; display: flex; align-items: center; gap: 0.5rem; }
+  .you i { width: 1.1rem; height: 1.1rem; border-radius: 50%; display: inline-block; border: 2px solid #fff; box-shadow: 0 0 0 2px #1b1b1a; }
   .status { min-height: 3em; margin: 0 0 0.5rem; }
   .dice-row { display: flex; align-items: center; gap: 0.75rem; margin: 0.25rem 0 0.75rem; }
 
@@ -114,6 +120,7 @@ import Base from "../layouts/Base.astro";
     legal: number[];
     winner: number | null;
     rolls: number[][];
+    names: (string | null)[];
     lastRoller: number | null;
     mode: "solo" | "code";
     turnEndsAt: number | null;
@@ -132,6 +139,16 @@ import Base from "../layouts/Base.astro";
   const rttEl = $<HTMLElement>("[data-rtt]");
   const roomEl = $<HTMLElement>("[data-room]");
   const codeInput = $<HTMLInputElement>("[data-code]");
+  const youEl = $<HTMLElement>("[data-you]");
+  const nameInput = $<HTMLInputElement>("[data-name]");
+  const esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+  /** "Asha", or the colour when no name was given. Plain text: escape before any innerHTML. */
+  const nameOf = (s: number) => view?.names?.[s] || NAMES[s]!;
+  try {
+    nameInput.value = localStorage.getItem("ludo-name") ?? "";
+  } catch {
+    // Storage blocked: the name field just starts empty.
+  }
 
   const COLORS = ["#d64545", "#2f9e57", "#d9a400", "#2f6fd6"];
   const NAMES = ["Red", "Green", "Yellow", "Blue"];
@@ -189,56 +206,86 @@ import Base from "../layouts/Base.astro";
     ctx2d.setTransform(px / SIZE, 0, 0, px / SIZE, 0, 0);
   }
 
+  // ── Your base at the bottom-left ─────────────────────────────────────────────────
+  // Each player's own screen turns the board (in quarter turns) so their yard sits bottom-left, the usual
+  // online-Ludo convention. Only positions are transformed, so text stays upright and clicks map exactly.
+  let turns = 0;
+  function rotate([x, y]: [number, number]): [number, number] {
+    let px = x;
+    let py = y;
+    for (let i = 0; i < turns; i++) [px, py] = [N - py, px]; // one quarter turn clockwise
+    return [px, py];
+  }
+  const at = (seat: number, t: number, p: number) => rotate(cellOf(seat, t, p));
+
+  function fillCells(x: number, y: number, w: number, h: number, fill: string, stroke?: string, width = 1): void {
+    const [ax, ay] = rotate([x, y]);
+    const [bx, by] = rotate([x + w, y + h]);
+    const [l, t, r, b] = [Math.min(ax, bx), Math.min(ay, by), Math.max(ax, bx), Math.max(ay, by)];
+    ctx2d.fillStyle = fill;
+    ctx2d.fillRect(l * C, t * C, (r - l) * C, (b - t) * C);
+    if (stroke) {
+      ctx2d.strokeStyle = stroke;
+      ctx2d.lineWidth = width;
+      ctx2d.strokeRect(l * C, t * C, (r - l) * C, (b - t) * C);
+    }
+  }
+
+  function text(s: string, [x, y]: [number, number], font: string, color: string): void {
+    ctx2d.fillStyle = color;
+    ctx2d.font = font;
+    ctx2d.textAlign = "center";
+    ctx2d.textBaseline = "middle";
+    ctx2d.fillText(s, x * C, y * C);
+  }
+
   function drawBoard(): void {
     const g = ctx2d;
+    turns = you >= 0 ? (3 - you + 4) % 4 : 0;
     g.fillStyle = "#fbfbf9";
     g.fillRect(0, 0, SIZE, SIZE);
     YARD_BASE.forEach(([x, y], s) => {
-      g.fillStyle = COLORS[s]!;
-      g.fillRect(x * C, y * C, 6 * C, 6 * C);
-      g.fillStyle = "#fff";
-      g.fillRect((x + 1) * C, (y + 1) * C, 4 * C, 4 * C);
+      fillCells(x, y, 6, 6, COLORS[s]!);
+      fillCells(x + 1, y + 1, 4, 4, s === you ? "#fff8d6" : "#fff");
     });
     TRACK.forEach(([x, y], i) => {
       const startSeat = START.indexOf(i);
-      g.fillStyle = startSeat >= 0 ? COLORS[startSeat]! : SAFE.has(i) ? "#ebe9e2" : "#fff";
-      g.fillRect(x * C, y * C, C, C);
-      g.strokeStyle = "#c9c7bf";
-      g.lineWidth = 1;
-      g.strokeRect(x * C, y * C, C, C);
-      if (SAFE.has(i) && startSeat < 0) {
-        g.fillStyle = "#9a978c";
-        g.font = "20px system-ui";
-        g.textAlign = "center";
-        g.textBaseline = "middle";
-        g.fillText("★", (x + 0.5) * C, (y + 0.5) * C);
-      }
+      fillCells(x, y, 1, 1, startSeat >= 0 ? COLORS[startSeat]! : SAFE.has(i) ? "#ebe9e2" : "#fff", "#c9c7bf");
+      if (SAFE.has(i) && startSeat < 0) text("★", rotate([x + 0.5, y + 0.5]), "20px system-ui", "#9a978c");
     });
-    HOME_COL.forEach((cells, s) =>
-      cells.forEach(([x, y]) => {
-        g.fillStyle = COLORS[s]!;
-        g.fillRect(x * C, y * C, C, C);
-        g.strokeStyle = "#c9c7bf";
-        g.strokeRect(x * C, y * C, C, C);
-      }),
-    );
+    HOME_COL.forEach((cells, s) => cells.forEach(([x, y]) => fillCells(x, y, 1, 1, COLORS[s]!, "#c9c7bf")));
     // Centre: four triangles pointing home.
-    const cx = 7.5 * C;
-    const cy = 7.5 * C;
     const tri: [number, number][][] = [
       [[6, 6], [6, 9]],
       [[6, 6], [9, 6]],
       [[9, 6], [9, 9]],
       [[6, 9], [9, 9]],
     ];
-    tri.forEach(([[ax, ay], [bx, by]], s) => {
+    const [cx, cy] = rotate([7.5, 7.5]);
+    tri.forEach(([a, b], s) => {
+      const [ax, ay] = rotate(a!);
+      const [bx, by] = rotate(b!);
       g.beginPath();
       g.moveTo(ax * C, ay * C);
       g.lineTo(bx * C, by * C);
-      g.lineTo(cx, cy);
+      g.lineTo(cx * C, cy * C);
       g.closePath();
       g.fillStyle = COLORS[s]!;
       g.fill();
+    });
+
+    // Who sits where: each yard is labelled, and yours is outlined and marked YOU.
+    if (!view) return;
+    YARD_BASE.forEach(([x, y], s) => {
+      const kind = view!.seats[s];
+      if (kind === "empty") return;
+      const label = s === you ? `YOU · ${nameOf(s)}` : `${nameOf(s)}${kind === "bot" ? " (bot)" : ""}`;
+      text(label, rotate([x + 3, y + 0.5]), s === you ? "bold 15px system-ui" : "600 13px system-ui", "#fff");
+      if (s === you) {
+        fillCells(x + 0.12, y + 0.12, 5.76, 5.76, "rgba(0,0,0,0)", "#1b1b1a", 5);
+        const turnNow = view!.turn === you && view!.phase !== "over" && view!.phase !== "lobby";
+        text(turnNow ? "▲ your turn" : "your base", rotate([x + 3, y + 5.5]), "bold 13px system-ui", "#fff");
+      }
     });
   }
 
@@ -296,7 +343,7 @@ import Base from "../layouts/Base.astro";
     v.tokens.forEach((list, seat) => {
       if (v.seats[seat] === "empty") return;
       list.forEach((p, t) => {
-        const [x, y] = cellOf(seat, t, p);
+        const [x, y] = at(seat, t, p);
         const k = `${x.toFixed(2)},${y.toFixed(2)}`;
         const bySeat = cells.get(k) ?? new Map();
         const arr = bySeat.get(seat) ?? [];
@@ -369,12 +416,12 @@ import Base from "../layouts/Base.astro";
 
   function renderTickers(v: View): void {
     const mine = (v.rolls[you] ?? []).slice(-10);
-    mineEl.innerHTML = `<span class="who">You (${NAMES[you]}), last 10</span>${mine.length ? chips(mine, you) : '<span class="who">no rolls yet</span>'}`;
+    mineEl.innerHTML = `<span class="who">You (${esc(nameOf(you))}), last 10</span>${mine.length ? chips(mine, you) : '<span class="who">no rolls yet</span>'}`;
     othersEl.innerHTML = v.seats
       .map((kind, s) => {
         if (s === you || kind === "empty") return "";
         const last = (v.rolls[s] ?? []).slice(-5);
-        return `<div class="ticker"><span class="who">${NAMES[s]}${kind === "bot" ? " (bot)" : ""}, last 5</span>${
+        return `<div class="ticker"><span class="who">${esc(nameOf(s))}${kind === "bot" ? " (bot)" : ""}, last 5</span>${
           last.length ? chips(last, s) : '<span class="who">no rolls yet</span>'
         }</div>`;
       })
@@ -404,11 +451,17 @@ import Base from "../layouts/Base.astro";
     if (canRoll) dieEl.style.setProperty("--die-ring", COLORS[you]!);
 
     renderTickers(v);
+    if (you >= 0) {
+      youEl.hidden = false;
+      const mine = v.names?.[you];
+      youEl.innerHTML = `<i style="background:${COLORS[you]}"></i>${mine ? `${esc(mine)} · ` : ""}You are ${NAMES[you]} · your base is bottom-left`;
+    }
 
-    const who = (s: number) => `${NAMES[s]}${s === you ? " (you)" : v.seats[s] === "bot" ? " (bot)" : ""}`;
+    const who = (s: number) => `${nameOf(s)}${s === you ? " (you)" : v.seats[s] === "bot" ? " (bot)" : ""}`;
     if (v.phase === "lobby") {
       const n = v.seats.filter((k) => k === "human").length;
-      statusEl.textContent = `Waiting for players: ${n} of 4 joined. You are ${NAMES[you]}.`;
+      const joined = v.seats.map((k, s) => (k === "human" ? nameOf(s) : null)).filter(Boolean).join(", ");
+      statusEl.textContent = `Waiting for players: ${n} of 4 joined (${joined}). You are ${NAMES[you]}.`;
     } else if (v.phase === "over") {
       statusEl.textContent = `${who(v.winner ?? 0)} wins.`;
     } else if (mine) {
@@ -466,6 +519,8 @@ import Base from "../layouts/Base.astro";
       retries = 0;
       pingSent = performance.now();
       send({ t: "ping" });
+      const name = nameInput.value.replace(/\s+/g, " ").trim();
+      if (name) send({ t: "name", name });
       window.clearInterval(pingTimer);
       pingTimer = window.setInterval(() => {
         pingSent = performance.now();
@@ -488,6 +543,10 @@ import Base from "../layouts/Base.astro";
         render();
       } else if (m.t === "err") {
         pendingAt = null;
+        if (m.code === "bad_message" && nameInput.value.trim()) {
+          statusEl.textContent = "That name can't be used: letters, numbers, spaces and - _ . ' only, up to 16.";
+          return;
+        }
         if (view) showFace(view.rolls[view.lastRoller ?? view.turn]?.at(-1) ?? null, view.lastRoller ?? view.turn);
         statusEl.textContent = `Not allowed: ${String(m.code).replace(/_/g, " ")}.`;
       }
@@ -504,6 +563,13 @@ import Base from "../layouts/Base.astro";
     };
   }
 
+  nameInput.addEventListener("change", () => {
+    try {
+      localStorage.setItem("ludo-name", nameInput.value.trim());
+    } catch {
+      // Remembering the name is a convenience only.
+    }
+  });
   $<HTMLButtonElement>("[data-solo]").addEventListener("click", () => connect(`s-${hex(8)}`));
   $<HTMLButtonElement>("[data-new]").addEventListener("click", () => {
     const abc = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -534,7 +600,7 @@ import Base from "../layouts/Base.astro";
     let best = -1;
     let bestD = 0.9;
     view.legal.forEach((t) => {
-      const [cx, cy] = cellOf(you, t, view!.tokens[you]![t]!);
+      const [cx, cy] = at(you, t, view!.tokens[you]![t]!);
       const d = Math.hypot(cx - x, cy - y);
       if (d < bestD) {
         bestD = d;

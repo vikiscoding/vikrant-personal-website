@@ -11,7 +11,7 @@
 | Route | `worker/ludo/route.ts` | `GET /api/ludo?room=…&key=…` WebSocket upgrade. Same origin only; room `s-<16 hex>` (solo) or `c-<4–6 A–Z0–9>` (code); key = random 16-hex seat token per tab. |
 | Page | `src/pages/ludo.astro` | Canvas board, roll button, click a highlighted token. Shows the player's own action time and round trip (computed in the browser, never sent). |
 
-**Solo:** you plus three server bots; starts at once. **Code:** seats fill in join order; the game starts when four have joined, or when a seated player presses *Start now with bots*. A fifth connection is refused (409). A player who leaves can rejoin the same seat from the same tab.
+**Solo:** you plus three server bots; starts at once. **Idle players:** while a player's tab stays connected, each prompt waits 15 s; then the server rolls for them, or plays the best legal move (`bestMove` in the engine: finish a token, capture, leave the yard, reach the home column or a safe square, escape danger, then progress). It uses no randomness, so replays stay exact; in 1,000 simulated games it won 82% against random bots. Bots keep playing seeded random moves. **Names:** optional, 1–16 letters, digits, spaces and `- _ . '`, checked on the server, shown to the room, kept only in the room's state and cleared when the last player leaves; never in telemetry. **Code:** seats fill in join order; the game starts when four have joined, or when a seated player presses *Start now with bots*. A fifth connection is refused (409). A player who leaves can rejoin the same seat from the same tab.
 
 **Abuse limits:** 256-byte messages, five message types with strict shapes, 40 messages per 10 s per socket (then close 1008), 8 sockets per room. Rejected actions get an error reply and are logged, never counted as server failures.
 
@@ -26,7 +26,7 @@ From response-time research (0.1 s feels instant, 1 s keeps flow, 10 s loses att
 | Bot step lateness | ≤ 250 ms past its 700 ms pace | > 1 s | Bots set the rhythm of a solo game |
 | Connect | answered | error | You cannot play at all |
 | Lobby wait (code rooms) | ≤ 2 min | abandoned | Friends give up waiting |
-| Human turn | — | 30 s, then the server plays for you | Keeps three other people from waiting on one |
+| Each prompt to a human (roll, then move) | acted | 15 s, then the server acts for them | Keeps three other people from waiting on one |
 
 ## Event schema
 
@@ -37,7 +37,7 @@ Every Ludo event is an ordinary SLI event (`docs/log-schema.md`): `v, ts, op, ou
 | `ludo_connect` | each WebSocket upgrade, in the site Worker | time to the room's answer | 101, or a correct 4xx (full, busy) | `mode` solo/code · `result` open/full/busy/rejected/error · `reason`? | 99.5% |
 | `ludo_action` | each human action; each bot step | human: receive → saved → broadcast · bot: alarm lateness + work | human ≤ 100 ms · bot ≤ 250 ms | `mode` · `actor` human/bot · `kind` roll/move/start · `lag`? (bot) | 99% |
 | `ludo_rtt` | server probe every 15 s, echoed at once by the page | server-timed round trip | ≤ 300 ms | `mode` | 95% |
-| `ludo_turn` | each human action on their turn; each 30 s timeout | think time: prompt pushed → action received | the human acted (a timeout is "degraded") | `mode` · `result` acted/timeout · `kind` | tracked |
+| `ludo_turn` | each human action on their turn; each 15 s prompt timeout | think time: prompt pushed → action received | the human acted (a timeout is "degraded") | `mode` · `result` acted/timeout · `kind` | tracked |
 | `ludo_lobby` | code room start, or the last player leaving the lobby | wait since the room was created | started within 2 min | `result` started/abandoned · `humans` · `bots` | tracked |
 | `ludo_game` | a winner, or the last player leaving mid-game | game duration | a winner | `mode` · `result` won/abandoned · `humans` · `winner` human/bot/none · `actions` | tracked |
 
@@ -49,7 +49,7 @@ Logged only, not in the ledger: `ludo_invalid` (a rejected action: the player's 
 
 ## What the player sees
 
-The die is a button (or press Space): it tumbles from the click until the server's number arrives (at least 350 ms, so it reads as a throw), then shows that face and keeps it until the next throw. Every roll anywhere tumbles the die in the roller's colour. Tickers show your last 10 rolls and each opponent's last 5; the history lives in the engine state, so every screen agrees and replays include it. Tokens sharing a square stack (same colour, with a count badge) or sit side by side (different colours).
+The die is a button (or press Space): it tumbles from the click until the server's number arrives (at least 350 ms, so it reads as a throw), then shows that face and keeps it until the next throw. Every roll anywhere tumbles the die in the roller's colour. Tickers show your last 10 rolls and each opponent's last 5; the history lives in the engine state, so every screen agrees and replays include it. Tokens sharing a square stack (same colour, with a count badge) or sit side by side (different colours). Each player's screen turns the board so their own base is bottom-left, outlined and marked YOU; every yard shows its player's name or colour.
 
 ## Telemetry not built yet
 
