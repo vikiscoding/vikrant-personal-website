@@ -7,12 +7,14 @@
 //   3. The first run whose write succeeds while a gap is open replays the gap's `ledger_unrecorded` lines into the ledger,
 //      one 30-minute slice per run (inside the Free plan's CPU limit), marked "backfilled", moving `from` forward after
 //      each slice so a retry never counts anything twice. Gap closed → the key is deleted.
-//   Mode "events" (a gap opened before `ledger_unrecorded` existed) replays the ordinary SLI lines from the first logged
-//   capacity error up to `to`. Logs are kept 3 days on the Free plan; an older gap is abandoned with a log line.
+//   Mode "events" (a gap opened before `ledger_unrecorded` existed, seeded by hand with the exact outage start found in
+//   the logs) replays the ordinary SLI lines in [from, to). Logs are kept 3 days on the Free plan; an older gap is
+//   abandoned with a log line. The query API returns newest first and parses JSON log lines into `source`, so the
+//   backfill uses exact field filters (op = ledger_unrecorded) or reads every event in a slice, never a text search.
 // Needs CF_ACCOUNT_ID (var) and CF_OBSERVABILITY_TOKEN (secret, Workers Observability permission). Without them the gap
 // stays open and waits. Never throws; never raises an incident.
 import type { Env } from "./env";
-import { findRecord, isCapacityLine, toEntry, type BackfillEntry, type LogRecord } from "./backfill-parse";
+import { findRecord, toEntry, type BackfillEntry } from "./backfill-parse";
 import { ledgerSource, type LedgerEntry } from "./ledger";
 
 export const GAP_KEY = "ledger:gap";
@@ -30,8 +32,6 @@ export interface Gap {
   /** End of the gap, when known (mode "events"); otherwise up to the run that closes it. */
   to?: number;
   mode: "unrecorded" | "events";
-  /** Mode "events": the first capacity error has been located, so `from` is exact. */
-  located?: boolean;
   /** Slice length in ms; halved when a slice hits the query limit. */
   step?: number;
   /** Entries restored so far. */
@@ -76,19 +76,6 @@ export async function reconcileLedger(env: Env, ledger: "ok" | "failed" | "none"
 /** One slice of replay per run. */
 async function step(env: Env, gap: Gap): Promise<void> {
   const end = Math.min(gap.to ?? Date.now(), Date.now());
-  if (gap.mode === "events" && !gap.located) {
-    const first = await firstCapacityError(env, gap.from, end);
-    if (first === null) {
-      await env.PULSE!.delete(GAP_KEY);
-      log("ok", "no capacity errors found in the window; nothing to backfill");
-      return;
-    }
-    gap.from = first;
-    gap.located = true;
-    await env.PULSE!.put(GAP_KEY, JSON.stringify(gap));
-    log("ok", `outage began ${new Date(first).toISOString()}; replaying from there`);
-    return;
-  }
   if (gap.from >= end) {
     await env.PULSE!.delete(GAP_KEY);
     log("ok", `gap closed; ${gap.restored ?? 0} entries restored from logs`);
@@ -96,8 +83,9 @@ async function step(env: Env, gap: Gap): Promise<void> {
   }
   const len = gap.step ?? SLICE_MS;
   const sliceEnd = Math.min(gap.from + len, end);
-  const needle = gap.mode === "unrecorded" ? "ledger_unrecorded" : '"v":1';
-  const events = await query(env, gap.from, sliceEnd, needle);
+  // Exact field filter for refused entries; for an "events" gap every event in the slice (filtered below by op).
+  const params = gap.mode === "unrecorded" ? { filters: [{ key: "op", operation: "eq", type: "string", value: "ledger_unrecorded" }] } : {};
+  const events = await query(env, gap.from, sliceEnd, params);
   if (events.length >= LIMIT && len > MIN_SLICE_MS) {
     gap.step = Math.max(MIN_SLICE_MS, Math.floor(len / 2)); // too many in one slice: smaller slices, same start
     await env.PULSE!.put(GAP_KEY, JSON.stringify(gap));
@@ -129,23 +117,8 @@ async function step(env: Env, gap: Gap): Promise<void> {
   log("ok", `restored ${entries.length} entries for ${lo} to ${hi}`);
 }
 
-/** Earliest capacity error logged in [from, to), searched slice by slice. */
-async function firstCapacityError(env: Env, from: number, to: number): Promise<number | null> {
-  for (let t = from; t < to; t += 2 * SLICE_MS) {
-    const events = await query(env, t, Math.min(t + 2 * SLICE_MS, to), "free tier");
-    const times = events
-      .filter((ev) => serviceOf(ev) === SERVICE)
-      .map((ev) => findRecord(ev))
-      .filter((r): r is LogRecord => r !== null && isCapacityLine(r))
-      .map((r) => Date.parse(r.ts))
-      .filter((n) => Number.isFinite(n));
-    if (times.length) return Math.min(...times);
-  }
-  return null;
-}
-
-/** One Workers Logs query: this Worker's log events in [from, to) that contain `needle`. */
-async function query(env: Env, from: number, to: number, needle: string): Promise<unknown[]> {
+/** One Workers Logs query over [from, to). Newest first, at most LIMIT events (a full page halves the slice). */
+async function query(env: Env, from: number, to: number, parameters: object): Promise<unknown[]> {
   const res = await fetch(`https://api.cloudflare.com/client/v4/accounts/${env.CF_ACCOUNT_ID}/workers/observability/telemetry/query`, {
     method: "POST",
     headers: { Authorization: `Bearer ${env.CF_OBSERVABILITY_TOKEN!.trim()}`, "Content-Type": "application/json" },
@@ -154,8 +127,7 @@ async function query(env: Env, from: number, to: number, needle: string): Promis
       timeframe: { from, to },
       view: "events",
       limit: LIMIT,
-      // Text search only; the service is checked per event (serviceOf), which does not depend on filter syntax.
-      parameters: { needle: { value: needle, isRegex: false, matchCase: false } },
+      parameters,
     }),
     signal: AbortSignal.timeout(10_000),
   });

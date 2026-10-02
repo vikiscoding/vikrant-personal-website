@@ -54,7 +54,8 @@ Rule: if the SLI ledger cannot record (a free-tier allowance used up, or any out
 - **Restore:** the first run whose write lands while a gap is open replays the gap's `ledger_unrecorded` lines, one 30-minute slice per run (inside the Free plan's CPU limit), marked `backfilled`. Progress is saved after each slice, so a retry never counts twice. Closed → the key is deleted; Workers Logs show `op = "ledger_backfill"` lines with what was restored.
 - **Needs:** `CF_ACCOUNT_ID` (var, in `wrangler.jsonc`) and the Worker secret `CF_OBSERVABILITY_TOKEN`: an API token with **Account → Workers Observability → Edit**, created under My Profile → API Tokens and added in the Worker's Settings → Variables and Secrets (never through an agent's `!` prompt). Without it the gap waits and logs why.
 - **Limits:** Workers Logs keep 3 days on the Free plan; an older gap is abandoned with a log line. Pulse run sessions and the visit counter are not backfilled (client-only, and a single number).
-- **A gap from before this rule** (2 Oct 2026): seeded by hand as `{ "from": <search start ms>, "to": <reset ms>, "mode": "events" }`. The backfill finds the first logged capacity error after `from` and replays the ordinary SLI lines from there to `to`.
+- **A gap from before this rule** (2 Oct 2026): seeded by hand as `{ "from": <exact outage start ms>, "to": <reset ms>, "mode": "events" }`, with `from` taken from the logs (the first `op = ledger` line saying "free tier": 17:36:20 UTC). The backfill replays the ordinary SLI lines in that window.
+- **API notes:** the query API returns events newest first and parses JSON log lines into `source`; text search does not match JSON keys, so the backfill uses exact field filters (`op = ledger_unrecorded`) or reads every event in a slice.
 - **Check it:** `npx wrangler kv key get --binding PULSE --remote ledger:gap` (absent = no open gap).
 
 ## Game days (the fault switch)
