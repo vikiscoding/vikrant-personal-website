@@ -20,4 +20,8 @@ export interface Env {
   /** Incident desk (ADR-016): engine repo "owner/name" and a fine-grained token (Contents: read and write) for repository_dispatch. */
   INCIDENTS_REPO?: string;
   INCIDENTS_DISPATCH_TOKEN?: string;
+  /** Ledger backfill (worker/backfill.ts): the account whose Workers Logs are queried, and a token with Workers
+   *  Observability permission, set in the Cloudflare dashboard. Without them a ledger gap waits instead of backfilling. */
+  CF_ACCOUNT_ID?: string;
+  CF_OBSERVABILITY_TOKEN?: string;
 }

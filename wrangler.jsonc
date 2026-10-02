@@ -55,7 +55,10 @@
     "DASHBOARD_MODE": "on",
     "GITHUB_REPO": "vikiscoding/vikrant-personal-website",
     // Incident desk (ADR-016). Secret INCIDENTS_DISPATCH_TOKEN is set in the Cloudflare dashboard, never via a `!` prompt.
-    "INCIDENTS_REPO": "vikiscoding/vikrant_perswebsite_incidents_aiengine"
+    "INCIDENTS_REPO": "vikiscoding/vikrant_perswebsite_incidents_aiengine",
+    // Ledger backfill (worker/backfill.ts): the account whose Workers Logs are queried. Not a secret. The token is a
+    // Worker secret, CF_OBSERVABILITY_TOKEN (Workers Observability permission), set in the Cloudflare dashboard.
+    "CF_ACCOUNT_ID": "f5eb41ba3de98a5c231390202fc5a3e0"
   },
   // Secret, not a var: `npx wrangler secret put GITHUB_TOKEN` (fine-grained, read-only, this repo only).
   // invocation_logs off: Cloudflare's automatic per-request logs include the visitor's IP and all headers,

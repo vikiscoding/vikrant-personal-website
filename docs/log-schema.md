@@ -6,6 +6,8 @@ Pulse run's browser events (`POST /api/rum`, ADR-015) are not log lines: they go
 
 Events with `op` in `ticker`, `pulse_api`, `page` are also written to the SLI ledger (ADR-012) as daily counts, with non-good and slow-good events kept in full.
 
+Two operational lines sit outside the SLI shape: `ledger_unrecorded` (an entry the ledger refused, logged in full under `entry` so it can be replayed) and `ledger_backfill` (what a restore replayed). See `docs/runbook.md` → Ledger outage and backfill.
+
 **Never logged:** IP addresses, email addresses, message bodies, request headers, tokens.
 
 | Field | Type | Values | Analytics Engine column |

@@ -7,7 +7,7 @@ import type { Env } from "../env";
 import { isCapacity, nextReset } from "../capacity";
 import { activeFault } from "../faults";
 import type { LedgerEntry } from "../ledger";
-import { record, type SliEvent } from "../log";
+import { logUnrecorded, record, type SliEvent } from "../log";
 import { detail } from "./telemetry";
 import { cleanChat, cleanName } from "./text";
 import { apply, autoAction, bestMove, newGame, SEATS, start, type Action, type Game, type SeatKind } from "./engine";
@@ -247,11 +247,9 @@ export class LudoRoom extends DurableObject<Env> {
     void this.persistState().catch(() => undefined); // one row per batch, so a reload never re-sends it
     const stub = this.env.LEDGER.get(this.env.LEDGER.idFromName("sli"));
     this.ctx.waitUntil(
-      Promise.resolve(stub.addBatch(batch)).catch((e) => {
-        this.tq = [...batch, ...this.tq].slice(-500);
-        if (!this.tqSince) this.tqSince = Date.now();
-        console.error(JSON.stringify({ v: 1, ts: new Date().toISOString(), op: "ledger", outcome: "error", detail: e instanceof Error ? e.message : "batch failed" }));
-      }),
+      // Refused (capacity or outage): log each entry as unrecorded; the ledger backfill replays them on restore.
+      // Not re-queued here, so there is exactly one way back for every event and none is counted twice.
+      Promise.resolve(stub.addBatch(batch)).catch((e) => logUnrecorded(batch, e)),
     );
   }
 

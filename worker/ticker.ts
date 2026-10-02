@@ -2,7 +2,8 @@
 // Its failures are genuine, which is what makes its SLO more than theatre.
 import type { Env } from "./env";
 import { activeFault } from "./faults";
-import { DepError, record } from "./log";
+import { reconcileLedger } from "./backfill";
+import { DepError, recordAwait } from "./log";
 import { incidentSignal, refreshFeed } from "./incidents";
 
 export const SNAPSHOT_KEY = "snapshot:v1";
@@ -78,12 +79,13 @@ export async function runTicker(env: Env, ctx?: ExecutionContext): Promise<void>
     } catch (e) {
       throw new DepError("kv", e instanceof Error ? e.message : "put failed", 500);
     }
-    record(env, { op: "ticker", outcome: "ok", status: 200, ms: Date.now() - started, dep: "none", fault }, ctx);
+    const ledger = await recordAwait(env, { op: "ticker", outcome: "ok", status: 200, ms: Date.now() - started, dep: "none", fault });
     await incidentSignal(env, true, "", fault); // after the SLI is recorded, so the desk never skews it
     await refreshFeed(env);
+    await reconcileLedger(env, ledger); // a ledger outage is never an incident: only noted here, and backfilled later
   } catch (e) {
     const err = e instanceof DepError ? e : new DepError("github", String(e), 500);
-    record(env, {
+    const ledger = await recordAwait(env, {
       op: "ticker",
       outcome: "error",
       status: err.status,
@@ -91,9 +93,10 @@ export async function runTicker(env: Env, ctx?: ExecutionContext): Promise<void>
       dep: err.dep,
       detail: err.detail,
       fault,
-    }, ctx);
+    });
     await incidentSignal(env, false, `${err.detail} (${err.dep})`, fault);
     await refreshFeed(env);
+    await reconcileLedger(env, ledger);
     // No re-throw: a thrown scheduled handler may drop the ledger write registered above,
     // and a failed tick is the one event the ledger must never lose. Logs and ledger carry it.
   }

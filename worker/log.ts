@@ -2,7 +2,7 @@
 // Written to places that do not share a failure domain with KV: Workers Logs (console),
 // the SLI ledger Durable Object (ADR-012) and, when enabled, Analytics Engine. Never logs IPs, emails or bodies.
 import type { Env } from "./env";
-import { ledgerSource } from "./ledger";
+import { ledgerSource, type LedgerEntry } from "./ledger";
 
 export type Outcome = "ok" | "degraded" | "error";
 export type Dep = "github" | "kv" | "assets" | "none";
@@ -33,20 +33,45 @@ export function record(env: Env, ev: SliEvent, ctx?: ExecutionContext): void {
   } catch {
     // Telemetry export failing must never fail the request.
   }
-  const source = ledgerSource(ev.op);
-  if (ctx && env.LEDGER && source) {
+  const entry = ledgerEntry(ev, ts);
+  if (ctx && env.LEDGER && entry) {
     const stub = env.LEDGER.get(env.LEDGER.idFromName("sli"));
-    const entry = {
-      ts,
-      source,
-      outcome: ev.outcome,
-      status: ev.status,
-      ms: ev.ms,
-      dep: ev.dep ?? "none",
-      detail: ev.detail ?? "",
-      fault: ev.fault ?? "none",
-    };
-    ctx.waitUntil(Promise.resolve(stub.add(entry)).catch((e) => console.error(JSON.stringify({ v: 1, ts, op: "ledger", outcome: "error", detail: e instanceof Error ? e.message : "add failed" }))));
+    ctx.waitUntil(Promise.resolve(stub.add(entry)).catch((e) => logUnrecorded([entry], e)));
+  }
+}
+
+function ledgerEntry(ev: SliEvent, ts: string): LedgerEntry | null {
+  const source = ledgerSource(ev.op);
+  if (!source) return null;
+  return { ts, source, outcome: ev.outcome, status: ev.status, ms: ev.ms, dep: ev.dep ?? "none", detail: ev.detail ?? "", fault: ev.fault ?? "none" };
+}
+
+/**
+ * The ledger refused these entries (capacity or outage). Each is logged in full as `ledger_unrecorded`, so the
+ * backfill (worker/backfill.ts) can replay exactly what was missed, and nothing that did land is counted twice.
+ */
+export function logUnrecorded(entries: LedgerEntry[], e: unknown): void {
+  const detail = e instanceof Error ? e.message : "add failed";
+  for (const entry of entries) {
+    console.error(JSON.stringify({ v: 1, ts: new Date().toISOString(), op: "ledger_unrecorded", outcome: "error", detail: detail.slice(0, 160), entry }));
+  }
+}
+
+/**
+ * Like `record`, but waits for the ledger write and says whether it landed. The scheduled job uses it once per run:
+ * that answer is how a ledger outage is noticed (and later backfilled). Never throws.
+ */
+export async function recordAwait(env: Env, ev: SliEvent): Promise<"ok" | "failed" | "none"> {
+  const ts = new Date().toISOString();
+  record(env, ev);
+  const entry = ledgerEntry(ev, ts);
+  if (!env.LEDGER || !entry) return "none";
+  try {
+    await env.LEDGER.get(env.LEDGER.idFromName("sli")).add(entry);
+    return "ok";
+  } catch (e) {
+    logUnrecorded([entry], e);
+    return "failed";
   }
 }
 
