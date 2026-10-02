@@ -49,7 +49,20 @@ Logged only, not in the ledger: `ludo_invalid` (a rejected action: the player's 
 
 ## What the player sees
 
-The die is a button (or press Space): it tumbles from the click until the server's number arrives (at least 350 ms, so it reads as a throw), then shows that face and keeps it until the next throw. Every roll anywhere tumbles the die in the roller's colour. Tickers show your last 10 rolls and each opponent's last 5; the history lives in the engine state, so every screen agrees and replays include it. Tokens sharing a square stack (same colour, with a count badge) or sit side by side (different colours). Each player's screen turns the board so their own base is bottom-left, outlined and marked YOU; every yard shows its player's name or colour.
+UX review, 2 Oct 2026 (panel: game UX designer, mobile and accessibility specialist, front-end performance engineer, SRE, privacy reviewer). Agreed and built:
+
+| Area | Decision |
+| --- | --- |
+| Flow | An app window with three screens: **start** (optional name, *Play vs 3 bots*, *Play with friends*, join by code), **lobby** (four seats filling live, invite link with Copy or the phone's share sheet, *Start now, bots fill empty seats*) and **game**. Invite links (`/ludo/?code=ABCD`) open on "Join game ABCD". Game over shows the winner with **Rematch** (same room, seats and names, new seed; refused while a game is running) and **New solo game**. |
+| Fewer taps | The server moves for a human when every legal token is on the same square (the choice cannot matter), in addition to the single-legal-move case. |
+| Reading the board | Each player's board is turned so their base is bottom-left, outlined and marked YOU; yard labels sit on each yard's top and bottom edge as seen on that screen. Same-colour stacks show a count badge; different colours share a square side by side. Dashed rings show where each movable token would land. |
+| Motion | Tokens hop square by square (at most about 0.65 s per move); captured tokens slide back to their yard after the mover lands. Only real single steps animate or raise a toast, never a join, rejoin or rematch. `prefers-reduced-motion` turns animation off. |
+| Feedback | The die tumbles until the server's number arrives (at least 350 ms) and keeps the last face; a countdown ring around it shows the 15 s prompt; the die pulses when it is your turn and the phone vibrates briefly. Toasts over the board centre announce captures and tokens reaching home (also read out by screen readers). Rolls tickers: your last 10, each opponent's last 5. |
+| Phones | **Full screen** button in the window's title bar: the Fullscreen API where available, otherwise (iPhone Safari) a fixed full-viewport overlay with safe-area padding and page scroll locked. Back, Esc or the Exit button leave it. Portrait puts the board on top at full width with controls below; landscape puts them side by side with the panel scrolling on its own. Tap targets are at least 44 px; the board ignores double-tap zoom. |
+| Keyboard | Space or Enter rolls; 1–4 moves that token. |
+| Privacy and telemetry | No new telemetry; full-screen use is not tracked. |
+
+Verified on the dev Worker: phone (390 × 844) and desktop renders of every screen, portrait and landscape full screen; a lobby, *Start now* and the rematch guard over live WebSockets; a full four-player game (583 moves) followed by a rematch.
 
 ## Telemetry not built yet
 

@@ -1,50 +1,88 @@
 ---
-// Ludo (docs/ludo-telemetry.md): a server-authoritative game whose real job is measuring interaction latency.
-// Solo: you plus three server bots. With a code: four people, or fewer plus bots. Telemetry is server-measured.
+// Ludo (docs/ludo-telemetry.md, ADR-026 proposed): a server-authoritative game whose job is measuring interaction
+// latency. The page is an app window with three screens (start, lobby, game) and a full-screen mode for phones.
+// Every rule and timer runs on the server; this page only draws state and sends the player's choices.
 import Base from "../layouts/Base.astro";
 ---
 
-<Base title="Ludo · vikrantsingh.fyi" description="Ludo against server bots or with friends on a shared code. Every move is timed by the server.">
+<Base title="Ludo · vikrantsingh.fyi" description="Ludo against server bots or with friends on a shared link. Every move is timed by the server.">
   <h1>Ludo</h1>
   <p>
-    Play alone against three server bots, or share a code with up to three friends. Every roll and move is decided and
-    timed on the server, so this page measures how long an interaction really takes. The results appear on{" "}
+    Play against three server bots, or send friends a link. Every roll and move is decided and timed on the server, so
+    the game also measures how long an interaction really takes; the results appear on{" "}
     <a href="/reliability/#ludo">Live reliability</a>.
   </p>
 
-  <div class="controls" data-setup>
-    <input data-name maxlength="16" placeholder="Your name (optional)" aria-label="Your name, optional, shown to the other players" autocomplete="nickname" />
-    <button type="button" data-solo>Play solo</button>
-    <span class="or">or</span>
-    <input data-code maxlength="6" placeholder="CODE" aria-label="Room code" autocomplete="off" spellcheck="false" />
-    <button type="button" data-join>Join code</button>
-    <button type="button" data-new>New code</button>
-  </div>
+  <section class="app" data-app data-screen="setup" aria-label="Ludo game">
+    <header class="bar">
+      <span class="lights" aria-hidden="true"><i></i><i></i><i></i></span>
+      <span class="title" data-title>Ludo</span>
+      <button type="button" class="bar-btn" data-invite hidden>Invite</button>
+      <button type="button" class="bar-btn" data-fs aria-pressed="false" title="Full screen">
+        <span data-fs-icon aria-hidden="true">⛶</span><span class="fs-label" data-fs-label>Full screen</span>
+      </button>
+    </header>
 
-  <div class="table" data-table hidden>
-    <canvas data-board aria-label="Ludo board"></canvas>
-    <div class="side">
-      <p class="you" data-you hidden></p>
-      <p class="status" aria-live="polite" data-status>Connecting…</p>
-      <div class="dice-row">
-        <button type="button" class="die" data-die data-face="0" aria-label="Roll the die" disabled>
-          <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
-        </button>
-        <button type="button" data-roll disabled>Roll</button>
-      </div>
-      <button type="button" data-start hidden>Start now with bots</button>
-
-      <h2 class="mini">Rolls</h2>
-      <div class="ticker" data-mine></div>
-      <div data-others></div>
-
-      <dl class="latency">
-        <dt>Your last action</dt><dd data-act>–</dd>
-        <dt>Round trip</dt><dd data-rtt>–</dd>
-      </dl>
-      <p class="muted small" data-room></p>
+    <!-- Start -->
+    <div class="screen setup" data-view="setup">
+      <label class="field">
+        <span>Your name <em>(optional, shown to other players)</em></span>
+        <input data-name maxlength="16" autocomplete="nickname" spellcheck="false" placeholder="e.g. Asha" />
+      </label>
+      <button type="button" class="primary big" data-solo>Play vs 3 bots</button>
+      <button type="button" class="big" data-host>Play with friends</button>
+      <form class="join" data-join-form>
+        <input data-code maxlength="6" placeholder="CODE" aria-label="Room code" autocomplete="off" spellcheck="false" />
+        <button type="submit" data-join>Join</button>
+      </form>
+      <p class="hint">Friends get a link; up to four people play, and empty seats can be filled with bots.</p>
     </div>
-  </div>
+
+    <!-- Lobby -->
+    <div class="screen lobby" data-view="lobby">
+      <h2>Waiting for players</h2>
+      <ol class="seats" data-seats></ol>
+      <div class="invite">
+        <input data-link readonly aria-label="Invite link" />
+        <button type="button" data-copy>Copy link</button>
+      </div>
+      <button type="button" class="primary" data-start>Start now, bots fill empty seats</button>
+      <p class="hint" data-lobby-hint>The game starts on its own when four players are in.</p>
+    </div>
+
+    <!-- Game -->
+    <div class="screen game" data-view="game">
+      <div class="board-wrap">
+        <canvas data-board aria-label="Ludo board"></canvas>
+        <p class="toast" data-toast role="status" aria-live="polite"></p>
+        <div class="over" data-over hidden>
+          <p class="winner" data-winner></p>
+          <div class="over-actions">
+            <button type="button" class="primary" data-rematch>Rematch</button>
+            <button type="button" data-newsolo>New solo game</button>
+          </div>
+        </div>
+      </div>
+      <aside class="panel">
+        <p class="you" data-you></p>
+        <p class="status" data-status aria-live="polite">Connecting…</p>
+        <div class="dice-row">
+          <div class="die-wrap" data-die-wrap>
+            <button type="button" class="die" data-die data-face="0" aria-label="Roll the die" disabled>
+              <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+            </button>
+          </div>
+          <button type="button" class="roll" data-roll disabled>Roll</button>
+        </div>
+        <p class="keys">Space rolls · 1–4 moves a token</p>
+        <div class="tickers">
+          <div class="ticker" data-mine></div>
+          <div data-others></div>
+        </div>
+        <p class="net" data-net></p>
+      </aside>
+    </div>
+  </section>
 
   <p class="note">
     Sent: your rolls and moves, a timing ping every 15 seconds, and the name you type, if any (shown only to players in
@@ -55,33 +93,113 @@ import Base from "../layouts/Base.astro";
 </Base>
 
 <style>
-  .controls { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin: 1.5rem 0; }
-  .controls input[data-name] { width: 12rem; text-transform: none; }
-  .controls input { width: 6.5rem; text-transform: uppercase; font: inherit; padding: 0.35rem 0.5rem; }
-  .or { color: var(--muted); }
-  button { font: inherit; padding: 0.4rem 0.9rem; cursor: pointer; }
-  button:disabled { cursor: default; opacity: 0.5; }
-  /* The board breaks out of the 42rem text column so tokens stay legible; it never exceeds the viewport. */
-  .table {
-    display: grid; grid-template-columns: minmax(0, 1fr) 14rem; gap: 1.25rem; align-items: start;
-    width: min(62rem, calc(100vw - 2rem)); position: relative; left: 50%; transform: translateX(-50%);
+  /* ── The app window ─────────────────────────────────────────────────────────── */
+  .app {
+    --bar: 2.75rem;
+    width: min(62rem, calc(100vw - 2rem));
+    position: relative;
+    left: 50%;
+    transform: translateX(-50%);
+    margin: 1.5rem 0;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--bg);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
+    overflow: hidden;
   }
-  canvas { width: 100%; aspect-ratio: 1; border: 1px solid var(--line); border-radius: 6px; cursor: pointer; touch-action: manipulation; display: block; }
-  .you { margin: 0 0 0.5rem; font-weight: 700; display: flex; align-items: center; gap: 0.5rem; }
-  .you i { width: 1.1rem; height: 1.1rem; border-radius: 50%; display: inline-block; border: 2px solid #fff; box-shadow: 0 0 0 2px #1b1b1a; }
-  .status { min-height: 3em; margin: 0 0 0.5rem; }
-  .dice-row { display: flex; align-items: center; gap: 0.75rem; margin: 0.25rem 0 0.75rem; }
+  .bar {
+    height: var(--bar);
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0 0.6rem 0 0.9rem;
+    background: var(--surface, #f3f2ee);
+    border-bottom: 1px solid var(--line);
+  }
+  .lights { display: inline-flex; gap: 0.35rem; }
+  .lights i { width: 0.7rem; height: 0.7rem; border-radius: 50%; display: block; }
+  .lights i:nth-child(1) { background: #d64545; }
+  .lights i:nth-child(2) { background: #d9a400; }
+  .lights i:nth-child(3) { background: #2f9e57; }
+  .title { font-weight: 650; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bar-btn { font: inherit; font-size: 0.875rem; padding: 0.3rem 0.7rem; border-radius: 999px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); cursor: pointer; display: inline-flex; gap: 0.35rem; align-items: center; min-height: 2.1rem; }
+  .bar-btn[hidden] { display: none; }
+  .bar-btn [data-fs-icon] { font-size: 1.05rem; line-height: 1; }
 
-  /* The die: a 3 × 3 pip grid; data-face picks which pips show. Colour follows whose turn it is. */
+  .screen { display: none; padding: 1.25rem; }
+  .app[data-screen="setup"] .setup,
+  .app[data-screen="lobby"] .lobby,
+  .app[data-screen="game"] .game { display: grid; }
+
+  button { font: inherit; padding: 0.55rem 1rem; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); cursor: pointer; min-height: 2.75rem; }
+  button:disabled { cursor: default; opacity: 0.5; }
+  /* Text in the page background colour: dark on the light accent in dark mode, light on the dark accent in light mode. */
+  button.primary { background: var(--accent); border-color: var(--accent); color: var(--bg); font-weight: 650; }
+  button.big { font-size: 1.05rem; padding: 0.8rem 1rem; }
+  button:focus-visible, input:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  input { font: inherit; padding: 0.55rem 0.7rem; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); min-height: 2.75rem; }
+
+  /* Start */
+  .setup { gap: 0.75rem; max-width: 26rem; margin: 0 auto; }
+  .field { display: grid; gap: 0.3rem; font-size: 0.9375rem; }
+  .field em { color: var(--muted); font-style: normal; font-size: 0.8125rem; }
+  .join { display: flex; gap: 0.5rem; }
+  .join input { flex: 1; min-width: 0; text-transform: uppercase; letter-spacing: 0.08em; }
+  .hint { color: var(--muted); font-size: 0.8125rem; margin: 0; }
+
+  /* Lobby */
+  .lobby { gap: 0.9rem; max-width: 30rem; margin: 0 auto; }
+  .lobby h2 { margin: 0; font-size: 1.25rem; }
+  .seats { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
+  :global(.seat) { display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem 0.7rem; border-radius: 8px; border: 1px solid var(--line); min-height: 2.75rem; }
+  :global(.seat i) { width: 1rem; height: 1rem; border-radius: 50%; flex: none; }
+  :global(.seat.waiting) { color: var(--muted); border-style: dashed; }
+  :global(.seat.me) { border-width: 2px; border-color: var(--fg); font-weight: 650; }
+  .invite { display: flex; gap: 0.5rem; }
+  .invite input { flex: 1; min-width: 0; font-size: 0.875rem; }
+
+  /* Game */
+  .game { grid-template-columns: minmax(0, 1fr) 15rem; gap: 1.25rem; align-items: start; }
+  .board-wrap { position: relative; width: 100%; aspect-ratio: 1; }
+  canvas { width: 100%; height: 100%; display: block; border-radius: 8px; touch-action: manipulation; cursor: pointer; }
+  .toast {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    max-width: 70%; margin: 0; padding: 0.45rem 0.85rem; border-radius: 12px; background: rgba(20, 20, 19, 0.9); color: #fff;
+    font-size: 0.875rem; font-weight: 600; text-align: center; pointer-events: none; opacity: 0; transition: opacity 0.2s;
+  }
+  .toast:global(.show) { opacity: 1; }
+  .over {
+    position: absolute; inset: 0; display: grid; place-content: center; gap: 1rem; text-align: center;
+    background: rgba(20, 20, 19, 0.72); border-radius: 8px; color: #fff;
+  }
+  .over[hidden] { display: none; }
+  .winner { font-size: 1.6rem; font-weight: 750; margin: 0; }
+  .over-actions { display: flex; gap: 0.6rem; justify-content: center; flex-wrap: wrap; }
+
+  .panel { display: grid; gap: 0.6rem; align-content: start; }
+  .you { margin: 0; font-weight: 700; display: flex; align-items: center; gap: 0.5rem; }
+  :global(.you i) { width: 1.1rem; height: 1.1rem; border-radius: 50%; display: inline-block; border: 2px solid #fff; box-shadow: 0 0 0 2px var(--fg); flex: none; }
+  .status { margin: 0; min-height: 2.6em; }
+  .dice-row { display: flex; align-items: center; gap: 0.75rem; }
+  .roll { min-width: 5rem; }
+  .keys { margin: 0; font-size: 0.75rem; color: var(--muted); }
+
+  /* The die: a 3 × 3 pip grid; data-face picks the pips. The ring around it is the turn countdown. */
+  .die-wrap {
+    --left: 0;
+    --ring: #9a978c;
+    padding: 4px; border-radius: 1rem;
+    background: conic-gradient(var(--ring) calc(var(--left) * 1turn), color-mix(in srgb, var(--ring) 15%, transparent) 0);
+  }
   .die {
     --pip: #1b1b1a;
-    width: 4rem; height: 4rem; padding: 0.45rem; border-radius: 0.8rem;
-    background: #fff; border: 3px solid var(--die-ring, #9a978c);
+    width: 4rem; height: 4rem; padding: 0.45rem; border-radius: 0.8rem; min-height: 0;
+    background: #fff; border: 2px solid var(--ring);
     display: grid; grid-template: repeat(3, 1fr) / repeat(3, 1fr); place-items: center;
-    box-shadow: 0 2px 0 rgba(0, 0, 0, 0.15);
   }
   .die:disabled { opacity: 1; }
-  .die:not(:disabled) { box-shadow: 0 0 0 4px color-mix(in srgb, var(--die-ring) 35%, transparent), 0 2px 0 rgba(0, 0, 0, 0.15); }
+  .die:not(:disabled) { animation: nudge 1.2s ease-in-out infinite; }
+  @keyframes nudge { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.07); } }
   .die span { width: 0.62rem; height: 0.62rem; border-radius: 50%; background: var(--pip); visibility: hidden; }
   .die[data-face="1"] span:nth-child(5),
   .die[data-face="2"] :is(span:nth-child(1), span:nth-child(9)),
@@ -89,30 +207,66 @@ import Base from "../layouts/Base.astro";
   .die[data-face="4"] :is(span:nth-child(1), span:nth-child(3), span:nth-child(7), span:nth-child(9)),
   .die[data-face="5"] :is(span:nth-child(1), span:nth-child(3), span:nth-child(5), span:nth-child(7), span:nth-child(9)),
   .die[data-face="6"] :is(span:nth-child(1), span:nth-child(3), span:nth-child(4), span:nth-child(6), span:nth-child(7), span:nth-child(9)) { visibility: visible; }
-  .die.rolling { animation: tumble 0.35s linear infinite; }
+  .die:global(.rolling) { animation: tumble 0.35s linear infinite; }
   @keyframes tumble { 0% { transform: rotate(0) scale(1); } 50% { transform: rotate(180deg) scale(0.9); } 100% { transform: rotate(360deg) scale(1); } }
-  @media (prefers-reduced-motion: reduce) { .die.rolling { animation: none; } }
 
-  .mini { font-size: 0.875rem; margin: 0.75rem 0 0.35rem; color: var(--muted); font-weight: 600; }
-  /* Tickers and chips are built at runtime (innerHTML), so these rules must be global to reach them. */
-  :global(.ticker) { display: flex; flex-wrap: wrap; gap: 0.25rem; align-items: center; margin: 0 0 0.4rem; min-height: 1.6rem; }
+  /* Tickers are built at runtime (innerHTML), so their rules are global. */
+  .tickers { display: grid; gap: 0.35rem; }
+  :global(.ticker) { display: flex; flex-wrap: wrap; gap: 0.25rem; align-items: center; min-height: 1.6rem; }
   :global(.ticker .who) { font-size: 0.75rem; color: var(--muted); width: 100%; }
-  :global(.chip) {
-    min-width: 1.5rem; height: 1.5rem; border-radius: 0.35rem; display: inline-grid; place-items: center;
-    font-size: 0.8125rem; font-weight: 700; color: #fff; font-variant-numeric: tabular-nums;
-  }
-  :global(.chip.six) { outline: 2px solid #1b1b1a; outline-offset: 1px; }
+  :global(.chip) { min-width: 1.5rem; height: 1.5rem; border-radius: 0.35rem; display: inline-grid; place-items: center; font-size: 0.8125rem; font-weight: 700; color: #fff; font-variant-numeric: tabular-nums; }
+  :global(.chip.six) { outline: 2px solid var(--fg); outline-offset: 1px; }
   :global(.chip.latest) { transform: scale(1.12); }
-  .latency { display: grid; grid-template-columns: auto auto; gap: 0.15rem 0.75rem; font-size: 0.875rem; margin: 1rem 0 0; }
-  .latency dd { margin: 0; font-variant-numeric: tabular-nums; }
-  .small { font-size: 0.8125rem; }
+  .net { margin: 0; font-size: 0.75rem; color: var(--muted); font-variant-numeric: tabular-nums; }
   .note { font-size: 0.875rem; }
-  @media (max-width: 760px) { .table { grid-template-columns: 1fr; } }
+
+  /* ── Phones: one column, the board first ───────────────────────────────────── */
+  @media (max-width: 760px) {
+    .app { width: calc(100vw - 1rem); }
+    .screen { padding: 0.75rem; }
+    .game { grid-template-columns: 1fr; gap: 0.75rem; }
+    .fs-label { display: none; }
+    .tickers { grid-template-columns: 1fr 1fr; }
+  }
+
+  /* ── Full screen: the native Fullscreen API where it exists, a fixed overlay where it does not (iPhone) ── */
+  .app:global(.is-fs) {
+    position: fixed; inset: 0; left: 0; transform: none; z-index: 1000;
+    width: 100vw; height: 100vh; height: 100dvh; margin: 0; border: 0; border-radius: 0;
+    display: flex; flex-direction: column;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+  .app:global(.is-fs) .screen { flex: 1; min-height: 0; overflow: auto; }
+  .app:global(.is-fs) .game { grid-template-columns: 1fr; grid-template-rows: auto 1fr; justify-items: center; align-content: start; align-items: start; gap: 0.5rem; padding: 0.5rem; }
+  /* Portrait: the board as large as the width allows, leaving room for the controls below. */
+  .app:global(.is-fs) .board-wrap { width: min(100%, calc(100dvh - var(--bar) - 12.5rem)); }
+  .app:global(.is-fs) .panel { width: 100%; max-width: 40rem; grid-template-columns: auto 1fr; align-items: center; column-gap: 1rem; }
+  .app:global(.is-fs) .panel .you,
+  .app:global(.is-fs) .panel .status { grid-column: 1 / -1; }
+  .app:global(.is-fs) .panel .status { min-height: 0; }
+  .app:global(.is-fs) .panel .keys,
+  .app:global(.is-fs) .panel .net { display: none; }
+  .app:global(.is-fs) .tickers { grid-template-columns: 1fr; }
+  .app:global(.is-fs) :global(.chip) { min-width: 1.3rem; height: 1.3rem; font-size: 0.75rem; }
+  @media (orientation: landscape) {
+    .app:global(.is-fs) .screen { overflow: hidden; }
+    .app:global(.is-fs) .game { grid-template-columns: auto minmax(13rem, 18rem); grid-template-rows: 1fr; justify-content: center; }
+    .app:global(.is-fs) .board-wrap { width: min(calc(100dvh - var(--bar) - 1rem), calc(100vw - 20rem)); }
+    /* The panel scrolls on its own so it can never push the board off a short landscape screen. */
+    .app:global(.is-fs) .panel { grid-template-columns: 1fr; max-height: calc(100dvh - var(--bar) - 1rem); overflow-y: auto; }
+  }
+  :global(html.ludo-lock), :global(html.ludo-lock body) { overflow: hidden; overscroll-behavior: none; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .die:global(.rolling), .die:not(:disabled) { animation: none; }
+    .toast { transition: none; }
+  }
 </style>
 
 <script>
+  type Kind = "human" | "bot" | "empty";
   type View = {
-    seats: ("human" | "bot" | "empty")[];
+    seats: Kind[];
     tokens: number[][];
     turn: number;
     phase: "lobby" | "roll" | "move" | "over";
@@ -122,41 +276,49 @@ import Base from "../layouts/Base.astro";
     rolls: number[][];
     names: (string | null)[];
     lastRoller: number | null;
+    moves: number;
     mode: "solo" | "code";
     turnEndsAt: number | null;
   };
 
   const $ = <T extends Element>(s: string) => document.querySelector<T>(s)!;
+  const app = $<HTMLElement>("[data-app]");
   const board = $<HTMLCanvasElement>("[data-board]");
   const ctx2d = board.getContext("2d")!;
+  const titleEl = $<HTMLElement>("[data-title]");
+  const inviteBtn = $<HTMLButtonElement>("[data-invite]");
+  const fsBtn = $<HTMLButtonElement>("[data-fs]");
+  const fsIcon = $<HTMLElement>("[data-fs-icon]");
+  const fsLabel = $<HTMLElement>("[data-fs-label]");
+  const nameInput = $<HTMLInputElement>("[data-name]");
+  const codeInput = $<HTMLInputElement>("[data-code]");
+  const joinBtn = $<HTMLButtonElement>("[data-join]");
+  const seatsEl = $<HTMLElement>("[data-seats]");
+  const linkInput = $<HTMLInputElement>("[data-link]");
+  const copyBtn = $<HTMLButtonElement>("[data-copy]");
+  const startBtn = $<HTMLButtonElement>("[data-start]");
+  const lobbyHint = $<HTMLElement>("[data-lobby-hint]");
+  const toastEl = $<HTMLElement>("[data-toast]");
+  const overEl = $<HTMLElement>("[data-over]");
+  const winnerEl = $<HTMLElement>("[data-winner]");
+  const youEl = $<HTMLElement>("[data-you]");
   const statusEl = $<HTMLElement>("[data-status]");
+  const dieWrap = $<HTMLElement>("[data-die-wrap]");
   const dieEl = $<HTMLButtonElement>("[data-die]");
   const rollBtn = $<HTMLButtonElement>("[data-roll]");
-  const startBtn = $<HTMLButtonElement>("[data-start]");
   const mineEl = $<HTMLElement>("[data-mine]");
   const othersEl = $<HTMLElement>("[data-others]");
-  const actEl = $<HTMLElement>("[data-act]");
-  const rttEl = $<HTMLElement>("[data-rtt]");
-  const roomEl = $<HTMLElement>("[data-room]");
-  const codeInput = $<HTMLInputElement>("[data-code]");
-  const youEl = $<HTMLElement>("[data-you]");
-  const nameInput = $<HTMLInputElement>("[data-name]");
-  const esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
-  /** "Asha", or the colour when no name was given. Plain text: escape before any innerHTML. */
-  const nameOf = (s: number) => view?.names?.[s] || NAMES[s]!;
-  try {
-    nameInput.value = localStorage.getItem("ludo-name") ?? "";
-  } catch {
-    // Storage blocked: the name field just starts empty.
-  }
+  const netEl = $<HTMLElement>("[data-net]");
 
   const COLORS = ["#d64545", "#2f9e57", "#d9a400", "#2f6fd6"];
   const NAMES = ["Red", "Green", "Yellow", "Blue"];
-  const N = 15; // grid cells per side
-  const SIZE = 600; // logical canvas size; scaled for the screen's pixel density
+  const N = 15;
+  const SIZE = 600;
   const C = SIZE / N;
+  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
-  // The shared 52-square track, starting at Red's entry square, clockwise.
+  // ── Board geometry (Red's entry square first, clockwise) ─────────────────────────
   const TRACK: [number, number][] = [
     [1, 6], [2, 6], [3, 6], [4, 6], [5, 6], [6, 5], [6, 4], [6, 3], [6, 2], [6, 1], [6, 0], [7, 0], [8, 0],
     [8, 1], [8, 2], [8, 3], [8, 4], [8, 5], [9, 6], [10, 6], [11, 6], [12, 6], [13, 6], [14, 6], [14, 7], [14, 8],
@@ -175,6 +337,7 @@ import Base from "../layouts/Base.astro";
   const YARD_SLOTS: [number, number][] = [[1.5, 1.5], [3.5, 1.5], [1.5, 3.5], [3.5, 3.5]];
   const FINISH: [number, number][] = [[6.6, 7], [7, 6.6], [7.4, 7], [7, 7.4]];
 
+  /** Grid position (cell centre) of a token at a given progress, before rotation. */
   function cellOf(seat: number, token: number, p: number): [number, number] {
     if (p === -1) {
       const [bx, by] = YARD_BASE[seat]!;
@@ -193,9 +356,25 @@ import Base from "../layouts/Base.astro";
     return [x + 0.5, y + 0.5];
   }
 
-  let view: View | null = null;
-  let you = -1;
+  // Each player's screen turns the board so their own base sits bottom-left. Only positions are transformed,
+  // so text stays upright and clicks map back exactly.
+  let turns = 0;
+  function rotate([x, y]: [number, number]): [number, number] {
+    let px = x;
+    let py = y;
+    for (let i = 0; i < turns; i++) [px, py] = [N - py, px];
+    return [px, py];
+  }
+  const at = (seat: number, t: number, p: number) => rotate(cellOf(seat, t, p));
 
+  // ── State ────────────────────────────────────────────────────────────────────────
+  let view: View | null = null;
+  let prev: View | null = null;
+  let you = -1;
+  const nameOf = (s: number) => view?.names?.[s] || NAMES[s]!;
+  const whoLabel = (s: number) => (s === you ? "You" : `${nameOf(s)}${view?.seats[s] === "bot" ? " (bot)" : ""}`);
+
+  // ── Drawing ──────────────────────────────────────────────────────────────────────
   function fitCanvas(): void {
     const dpr = Math.min(window.devicePixelRatio || 1, 3);
     const px = Math.round(board.clientWidth * dpr) || SIZE;
@@ -205,18 +384,6 @@ import Base from "../layouts/Base.astro";
     }
     ctx2d.setTransform(px / SIZE, 0, 0, px / SIZE, 0, 0);
   }
-
-  // ── Your base at the bottom-left ─────────────────────────────────────────────────
-  // Each player's own screen turns the board (in quarter turns) so their yard sits bottom-left, the usual
-  // online-Ludo convention. Only positions are transformed, so text stays upright and clicks map exactly.
-  let turns = 0;
-  function rotate([x, y]: [number, number]): [number, number] {
-    let px = x;
-    let py = y;
-    for (let i = 0; i < turns; i++) [px, py] = [N - py, px]; // one quarter turn clockwise
-    return [px, py];
-  }
-  const at = (seat: number, t: number, p: number) => rotate(cellOf(seat, t, p));
 
   function fillCells(x: number, y: number, w: number, h: number, fill: string, stroke?: string, width = 1): void {
     const [ax, ay] = rotate([x, y]);
@@ -254,7 +421,6 @@ import Base from "../layouts/Base.astro";
       if (SAFE.has(i) && startSeat < 0) text("★", rotate([x + 0.5, y + 0.5]), "20px system-ui", "#9a978c");
     });
     HOME_COL.forEach((cells, s) => cells.forEach(([x, y]) => fillCells(x, y, 1, 1, COLORS[s]!, "#c9c7bf")));
-    // Centre: four triangles pointing home.
     const tri: [number, number][][] = [
       [[6, 6], [6, 9]],
       [[6, 6], [9, 6]],
@@ -273,23 +439,28 @@ import Base from "../layouts/Base.astro";
       g.fillStyle = COLORS[s]!;
       g.fill();
     });
-
-    // Who sits where: each yard is labelled, and yours is outlined and marked YOU.
     if (!view) return;
+    // Labels go on each yard's top and bottom borders as seen on this screen (after rotation), so they always read
+    // left to right and never run through a border.
     YARD_BASE.forEach(([x, y], s) => {
       const kind = view!.seats[s];
       if (kind === "empty") return;
+      const [ax, ay] = rotate([x, y]);
+      const [bx, by] = rotate([x + 6, y + 6]);
+      const mid = (ax + bx) / 2;
+      const top = Math.min(ay, by);
+      const bottom = Math.max(ay, by);
       const label = s === you ? `YOU · ${nameOf(s)}` : `${nameOf(s)}${kind === "bot" ? " (bot)" : ""}`;
-      text(label, rotate([x + 3, y + 0.5]), s === you ? "bold 15px system-ui" : "600 13px system-ui", "#fff");
+      text(label, [mid, top + 0.5], s === you ? "bold 15px system-ui" : "600 13px system-ui", "#fff");
       if (s === you) {
         fillCells(x + 0.12, y + 0.12, 5.76, 5.76, "rgba(0,0,0,0)", "#1b1b1a", 5);
         const turnNow = view!.turn === you && view!.phase !== "over" && view!.phase !== "lobby";
-        text(turnNow ? "▲ your turn" : "your base", rotate([x + 3, y + 5.5]), "bold 13px system-ui", "#fff");
+        text(turnNow ? "▲ your turn" : "your base", [mid, bottom - 0.5], "bold 13px system-ui", "#fff");
       }
     });
   }
 
-  function token(x: number, y: number, seat: number, label: string, highlight: boolean, r = 13): void {
+  function token(x: number, y: number, seat: number, label: string, highlight: boolean, r = 15): void {
     const g = ctx2d;
     const rr = highlight ? r + 2 : r;
     g.beginPath();
@@ -327,7 +498,26 @@ import Base from "../layouts/Base.astro";
     g.fillText(String(n), x, y + 0.5);
   }
 
-  /** Offsets for 1–4 colours sharing one square: side by side, then a 2 × 2 grid. */
+  /** Where each legal token would land: a dashed ring in the mover's colour, so the choice is visible before tapping. */
+  function drawGhosts(): void {
+    const v = view;
+    if (!v || v.phase !== "move" || v.turn !== you || v.die === null || animating()) return;
+    const g = ctx2d;
+    for (const t of v.legal) {
+      const from = v.tokens[you]![t]!;
+      const to = from === -1 ? 0 : from + v.die;
+      const [x, y] = at(you, t, to);
+      g.save();
+      g.setLineDash([4, 4]);
+      g.lineWidth = 3;
+      g.strokeStyle = COLORS[you]!;
+      g.beginPath();
+      g.arc(x * C, y * C, 14, 0, Math.PI * 2);
+      g.stroke();
+      g.restore();
+    }
+  }
+
   const SPOTS: [number, number][][] = [
     [[0, 0]],
     [[-9, 0], [9, 0]],
@@ -335,14 +525,15 @@ import Base from "../layouts/Base.astro";
     [[-9, -9], [9, -9], [-9, 9], [9, 9]],
   ];
 
-  /** Same-colour tokens on a square stack like coins with a count badge; different colours each get their own spot. */
-  function drawTokens(): void {
+  /** Same-colour tokens on a square stack with a count badge; different colours each get their own spot. */
+  function drawTokens(now: number): void {
     if (!view) return;
     const v = view;
     const cells = new Map<string, Map<number, { t: number; x: number; y: number }[]>>();
     v.tokens.forEach((list, seat) => {
       if (v.seats[seat] === "empty") return;
       list.forEach((p, t) => {
+        if (anims.has(`${seat}:${t}`)) return; // drawn on top by drawMoving
         const [x, y] = at(seat, t, p);
         const k = `${x.toFixed(2)},${y.toFixed(2)}`;
         const bySeat = cells.get(k) ?? new Map();
@@ -361,11 +552,9 @@ import Base from "../layouts/Base.astro";
         const [ox, oy] = SPOTS[seats.length - 1]![j]!;
         const n = stack.length;
         stack.forEach((e, i) => {
-          const x = e.x * C + ox - i * 2.5;
-          const y = e.y * C + oy - i * 4;
           const top = i === n - 1;
-          const movable = v.phase === "move" && v.turn === seat && seat === you && v.legal.includes(e.t);
-          token(x, y, seat, top && !shared ? String(e.t + 1) : "", movable && top, r);
+          const movable = v.phase === "move" && v.turn === seat && seat === you && v.legal.includes(e.t) && !animating();
+          token(e.x * C + ox - i * 2.5, e.y * C + oy - i * 4, seat, top && !shared ? String(e.t + 1) : "", movable && top, r);
         });
         if (n > 1) {
           const top = stack[n - 1]!;
@@ -373,22 +562,87 @@ import Base from "../layouts/Base.astro";
         }
       });
     }
+    drawMoving(now);
   }
 
+  // ── Movement: tokens hop along the track; captured tokens slide home ───────────────
+  type Anim = { seat: number; t: number; path: [number, number][]; start: number; stepMs: number };
+  const anims = new Map<string, Anim>();
+  const animating = () => anims.size > 0;
+  /** A real next step of the same game, not a join, rejoin, rematch or skipped stretch: only these animate or announce. */
+  const isStep = (before: View, after: View) =>
+    before.phase !== "lobby" && before.phase !== "over" && after.moves >= before.moves && after.moves - before.moves <= 6;
+
+  function planAnimations(before: View, after: View): void {
+    anims.clear();
+    if (reduceMotion || !isStep(before, after)) return;
+    const now = performance.now();
+    let moverEnds = now;
+    after.tokens.forEach((list, seat) =>
+      list.forEach((to, t) => {
+        const from = before.tokens[seat]?.[t] ?? to;
+        if (from === to || to === -1) return;
+        const steps: [number, number][] = [cellOf(seat, t, from)];
+        if (from === -1) steps.push(cellOf(seat, t, 0));
+        else for (let p = from + 1; p <= to; p++) steps.push(cellOf(seat, t, p));
+        const stepMs = Math.min(110, 650 / Math.max(1, steps.length - 1));
+        anims.set(`${seat}:${t}`, { seat, t, path: steps, start: now, stepMs });
+        moverEnds = Math.max(moverEnds, now + stepMs * (steps.length - 1));
+      }),
+    );
+    after.tokens.forEach((list, seat) =>
+      list.forEach((to, t) => {
+        const from = before.tokens[seat]?.[t] ?? to;
+        if (from >= 0 && to === -1) {
+          anims.set(`${seat}:${t}`, { seat, t, path: [cellOf(seat, t, from), cellOf(seat, t, -1)], start: moverEnds, stepMs: 320 });
+        }
+      }),
+    );
+  }
+
+  function drawMoving(now: number): void {
+    for (const [k, a] of anims) {
+      const elapsed = now - a.start;
+      const total = a.stepMs * (a.path.length - 1);
+      if (elapsed >= total) {
+        anims.delete(k);
+        continue;
+      }
+      const f = Math.max(0, elapsed) / a.stepMs;
+      const i = Math.min(a.path.length - 2, Math.floor(f));
+      const u = f - i;
+      const [x0, y0] = rotate(a.path[i]!);
+      const [x1, y1] = rotate(a.path[i + 1]!);
+      const hop = a.path.length > 2 ? Math.sin(Math.PI * u) * 0.25 : 0; // a small hop per square
+      token((x0 + (x1 - x0) * u) * C, (y0 + (y1 - y0) * u - hop) * C, a.seat, String(a.t + 1), false);
+    }
+  }
+
+  let frame = 0;
   function draw(): void {
-    fitCanvas();
-    drawBoard();
-    drawTokens();
+    cancelAnimationFrame(frame);
+    const tick = () => {
+      fitCanvas();
+      drawBoard();
+      drawTokens(performance.now());
+      drawGhosts();
+      if (animating()) frame = requestAnimationFrame(tick);
+    };
+    tick();
   }
 
-  // ── Die ────────────────────────────────────────────────────────────────────────
+  // ── Die and countdown ─────────────────────────────────────────────────────────────
   let rollingTimer: number | undefined;
   let rollingSince = 0;
-  const MIN_TUMBLE_MS = 350; // long enough to read as a throw; never longer than the server's answer needs
+  const MIN_TUMBLE_MS = 350;
+
+  function setRing(seat: number): void {
+    dieWrap.style.setProperty("--ring", COLORS[seat]!);
+  }
 
   function startTumble(seat: number): void {
-    dieEl.style.setProperty("--die-ring", COLORS[seat]!);
-    if (rollingTimer !== undefined) return;
+    setRing(seat);
+    if (rollingTimer !== undefined || reduceMotion) return;
     rollingSince = performance.now();
     dieEl.classList.add("rolling");
     rollingTimer = window.setInterval(() => (dieEl.dataset.face = String(1 + Math.floor(Math.random() * 6))), 70);
@@ -400,14 +654,52 @@ import Base from "../layouts/Base.astro";
       rollingTimer = undefined;
       dieEl.classList.remove("rolling");
       dieEl.dataset.face = face === null ? "0" : String(face);
-      dieEl.style.setProperty("--die-ring", COLORS[seat]!);
+      setRing(seat);
     };
     const left = rollingTimer === undefined ? 0 : MIN_TUMBLE_MS - (performance.now() - rollingSince);
     if (left > 0) window.setTimeout(settle, left);
     else settle();
   }
 
-  // ── Roll history ───────────────────────────────────────────────────────────────
+  const PROMPT_MS = 15_000; // matches HUMAN_PROMPT_MS on the server; only used to scale the ring
+  window.setInterval(() => {
+    const v = view;
+    const mine = v && v.turn === you && v.turnEndsAt && v.phase !== "over" && v.phase !== "lobby";
+    const left = mine ? Math.max(0, Math.min(1, (v!.turnEndsAt! - Date.now()) / PROMPT_MS)) : 0;
+    dieWrap.style.setProperty("--left", left.toFixed(3));
+  }, 200);
+
+  // ── Toasts: what just happened, for eyes and screen readers ─────────────────────────
+  let toastTimer: number | undefined;
+  function toast(msg: string): void {
+    toastEl.textContent = msg;
+    toastEl.classList.add("show");
+    window.clearTimeout(toastTimer);
+    toastTimer = window.setTimeout(() => toastEl.classList.remove("show"), 2400);
+  }
+
+  function announce(before: View, after: View): void {
+    if (!isStep(before, after)) return;
+    after.tokens.forEach((list, seat) =>
+      list.forEach((to, t) => {
+        const from = before.tokens[seat]?.[t] ?? to;
+        if (from >= 0 && to === -1) {
+          const by = after.lastRoller ?? after.turn;
+          toast(
+            seat === you
+              ? `${nameOf(by)} captured your token!`
+              : by === you
+                ? `You captured ${nameOf(seat)}'s token!`
+                : `${nameOf(by)} captured ${nameOf(seat)}`,
+          );
+        } else if (from !== to && to === 56) {
+          toast(seat === you ? "A token made it home!" : `${nameOf(seat)} brought a token home`);
+        }
+      }),
+    );
+  }
+
+  // ── Rolls ticker ─────────────────────────────────────────────────────────────────
   function chips(list: number[], seat: number): string {
     return list
       .map((d, i) => `<span class="chip${d === 6 ? " six" : ""}${i === list.length - 1 ? " latest" : ""}" style="background:${COLORS[seat]}">${d}</span>`)
@@ -416,71 +708,92 @@ import Base from "../layouts/Base.astro";
 
   function renderTickers(v: View): void {
     const mine = (v.rolls[you] ?? []).slice(-10);
-    mineEl.innerHTML = `<span class="who">You (${esc(nameOf(you))}), last 10</span>${mine.length ? chips(mine, you) : '<span class="who">no rolls yet</span>'}`;
+    mineEl.innerHTML = `<span class="who">Your last 10 rolls</span>${mine.length ? chips(mine, you) : '<span class="who">none yet</span>'}`;
     othersEl.innerHTML = v.seats
       .map((kind, s) => {
         if (s === you || kind === "empty") return "";
         const last = (v.rolls[s] ?? []).slice(-5);
         return `<div class="ticker"><span class="who">${esc(nameOf(s))}${kind === "bot" ? " (bot)" : ""}, last 5</span>${
-          last.length ? chips(last, s) : '<span class="who">no rolls yet</span>'
+          last.length ? chips(last, s) : '<span class="who">none yet</span>'
         }</div>`;
       })
       .join("");
   }
 
-  // ── Rendering a state ──────────────────────────────────────────────────────────
-  let lastRollCount = -1;
+  // ── Screens ──────────────────────────────────────────────────────────────────────
+  function setScreen(s: "setup" | "lobby" | "game"): void {
+    if (app.dataset.screen === s) return;
+    app.dataset.screen = s;
+    if (s === "game") requestAnimationFrame(() => draw());
+  }
+
+  let room = "";
+  const inviteLink = () => `${location.origin}/ludo/?code=${encodeURIComponent(room.slice(2))}`;
+
+  function renderLobby(v: View): void {
+    seatsEl.innerHTML = v.seats
+      .map((kind, s) => {
+        const me = s === you;
+        const label = kind === "empty" ? "waiting…" : `${esc(nameOf(s))}${me ? " (you)" : ""}`;
+        return `<li class="seat${kind === "empty" ? " waiting" : ""}${me ? " me" : ""}"><i style="background:${COLORS[s]}"></i>${label}</li>`;
+      })
+      .join("");
+    const n = v.seats.filter((k) => k === "human").length;
+    lobbyHint.textContent = n < 4 ? `${n} of 4 here. The game starts on its own at four, or start now and bots take the empty seats.` : "Everyone is here.";
+    linkInput.value = inviteLink();
+  }
 
   function render(): void {
-    draw();
-    if (!view) return;
     const v = view;
+    if (!v) return;
+    if (v.phase === "lobby") {
+      setScreen("lobby");
+      renderLobby(v);
+      return;
+    }
+    setScreen("game");
+    draw();
+
     const mine = v.turn === you;
     const canRoll = mine && v.phase === "roll";
     rollBtn.disabled = !canRoll;
     dieEl.disabled = !canRoll;
-    startBtn.hidden = v.phase !== "lobby";
 
-    // A new roll anywhere (yours, a bot's, a friend's) tumbles the die, then lands on the server's number.
     const rollCount = v.rolls.reduce((n, r) => n + r.length, 0);
     const lastRoller = v.lastRoller ?? v.turn;
-    if (lastRollCount >= 0 && rollCount > lastRollCount && rollingTimer === undefined) startTumble(lastRoller);
-    lastRollCount = rollCount;
-    // The die keeps the last number thrown until the next throw, so a bot's roll stays readable.
+    if (prev && rollCount > prev.rolls.reduce((n, r) => n + r.length, 0) && rollingTimer === undefined) startTumble(lastRoller);
     showFace(v.rolls[lastRoller]?.at(-1) ?? null, lastRoller);
-    if (canRoll) dieEl.style.setProperty("--die-ring", COLORS[you]!);
+    if (canRoll) setRing(you);
 
     renderTickers(v);
-    if (you >= 0) {
-      youEl.hidden = false;
-      const mine = v.names?.[you];
-      youEl.innerHTML = `<i style="background:${COLORS[you]}"></i>${mine ? `${esc(mine)} · ` : ""}You are ${NAMES[you]} · your base is bottom-left`;
-    }
+    const myName = v.names?.[you];
+    youEl.innerHTML = `<i style="background:${COLORS[you]}"></i>${myName ? `${esc(myName)} · ` : ""}${NAMES[you]}, base bottom-left`;
 
-    const who = (s: number) => `${nameOf(s)}${s === you ? " (you)" : v.seats[s] === "bot" ? " (bot)" : ""}`;
-    if (v.phase === "lobby") {
-      const n = v.seats.filter((k) => k === "human").length;
-      const joined = v.seats.map((k, s) => (k === "human" ? nameOf(s) : null)).filter(Boolean).join(", ");
-      statusEl.textContent = `Waiting for players: ${n} of 4 joined (${joined}). You are ${NAMES[you]}.`;
-    } else if (v.phase === "over") {
-      statusEl.textContent = `${who(v.winner ?? 0)} wins.`;
-    } else if (mine) {
-      const left = v.turnEndsAt ? Math.max(0, Math.round((v.turnEndsAt - Date.now()) / 1000)) : null;
-      statusEl.textContent =
-        v.phase === "roll" ? `Your turn: roll the die.${left !== null ? ` ${left}s left.` : ""}` : "Pick a highlighted token.";
+    if (v.phase === "over") {
+      statusEl.textContent = v.winner === you ? "You win!" : `${nameOf(v.winner ?? 0)} wins.`;
+      winnerEl.textContent = v.winner === you ? "You win! 🎉" : `${nameOf(v.winner ?? 0)} wins`;
+      overEl.hidden = false;
     } else {
-      statusEl.textContent = `${who(v.turn)} to ${v.phase}.`;
+      overEl.hidden = true;
+      statusEl.textContent = mine
+        ? v.phase === "roll"
+          ? "Your turn: roll the die."
+          : `You rolled ${v.die}. Tap a ringed token (the dashed circle shows where it lands).`
+        : `${whoLabel(v.turn)} ${v.phase === "roll" ? "to roll" : "to move"}…`;
     }
   }
 
-  // ── Connection ────────────────────────────────────────────────────────────────
+  // ── Connection ───────────────────────────────────────────────────────────────────
   let ws: WebSocket | null = null;
-  let room = "";
   let pendingAt: number | null = null;
+  let lastAction: number | null = null;
+  let lastRtt: number | null = null;
   let retries = 0;
   let pingTimer: number | undefined;
+  let leaving = false;
 
   const hex = (n: number) => Array.from(crypto.getRandomValues(new Uint8Array(n)), (b) => b.toString(16).padStart(2, "0")).join("");
+  const cleanName = () => nameInput.value.replace(/\s+/g, " ").trim();
 
   function keyFor(r: string): string {
     const k = `ludo-key:${r}`;
@@ -501,17 +814,31 @@ import Base from "../layouts/Base.astro";
     ws.send(JSON.stringify(body));
   }
 
-  function roll(): void {
-    if (!view || view.turn !== you || view.phase !== "roll") return;
-    startTumble(you);
-    send({ t: "roll" }, true);
+  function renderNet(): void {
+    netEl.textContent = `Network: ${lastAction === null ? "–" : `${lastAction} ms per action`} · ${lastRtt === null ? "–" : `${lastRtt} ms round trip`}`;
   }
 
   function connect(r: string): void {
+    leaving = false;
     room = r;
-    $<HTMLElement>("[data-setup]").hidden = true;
-    $<HTMLElement>("[data-table]").hidden = false;
-    roomEl.textContent = r.startsWith("c-") ? `Code: ${r.slice(2)}. Share it; up to four can join.` : "Solo game against three server bots.";
+    prev = null;
+    view = null;
+    anims.clear();
+    overEl.hidden = true;
+    const code = r.startsWith("c-") ? r.slice(2) : null;
+    titleEl.textContent = code ? `Ludo · room ${code}` : "Ludo · solo vs 3 bots";
+    inviteBtn.hidden = !code;
+    statusEl.textContent = "Connecting…";
+    setScreen(code ? "lobby" : "game");
+    if (code) {
+      seatsEl.innerHTML = "";
+      linkInput.value = inviteLink();
+      try {
+        history.replaceState(history.state, "", `/ludo/?code=${encodeURIComponent(code)}`);
+      } catch {
+        // Updating the address bar is a convenience only.
+      }
+    }
     const proto = location.protocol === "https:" ? "wss" : "ws";
     ws = new WebSocket(`${proto}://${location.host}/api/ludo?room=${encodeURIComponent(r)}&key=${keyFor(r)}`);
     let pingSent = performance.now();
@@ -519,7 +846,7 @@ import Base from "../layouts/Base.astro";
       retries = 0;
       pingSent = performance.now();
       send({ t: "ping" });
-      const name = nameInput.value.replace(/\s+/g, " ").trim();
+      const name = cleanName();
       if (name) send({ t: "name", name });
       window.clearInterval(pingTimer);
       pingTimer = window.setInterval(() => {
@@ -532,27 +859,38 @@ import Base from "../layouts/Base.astro";
       if (m.t === "probe") {
         // Echo at once: the server times the round trip, so the figure is not this browser's claim.
         send({ t: "echo", s: m.s });
-        rttEl.textContent = `${Math.round(performance.now() - pingSent)} ms`;
+        lastRtt = Math.round(performance.now() - pingSent);
+        renderNet();
       } else if (m.t === "state") {
+        const before = view;
         you = m.you;
         view = m.g;
         if (pendingAt !== null) {
-          actEl.textContent = `${Math.round(performance.now() - pendingAt)} ms`;
+          lastAction = Math.round(performance.now() - pendingAt);
           pendingAt = null;
+          renderNet();
         }
+        if (before && view) {
+          planAnimations(before, view);
+          announce(before, view);
+          const myTurnNow = view.turn === you && view.phase === "roll" && !(before.turn === you && before.phase === "roll");
+          if (myTurnNow && document.visibilityState === "visible") navigator.vibrate?.(35);
+        }
+        prev = before;
         render();
       } else if (m.t === "err") {
         pendingAt = null;
-        if (m.code === "bad_message" && nameInput.value.trim()) {
-          statusEl.textContent = "That name can't be used: letters, numbers, spaces and - _ . ' only, up to 16.";
+        if (m.code === "bad_message" && cleanName()) {
+          toast("That name can't be used: letters, numbers, spaces and - _ . ' only");
           return;
         }
         if (view) showFace(view.rolls[view.lastRoller ?? view.turn]?.at(-1) ?? null, view.lastRoller ?? view.turn);
-        statusEl.textContent = `Not allowed: ${String(m.code).replace(/_/g, " ")}.`;
+        toast(`Not allowed: ${String(m.code).replace(/_/g, " ")}`);
       }
     };
     ws.onclose = (e) => {
       window.clearInterval(pingTimer);
+      if (leaving) return;
       if (e.code === 1008 || retries >= 3) {
         statusEl.textContent = "Disconnected. Reload to rejoin.";
         return;
@@ -563,42 +901,87 @@ import Base from "../layouts/Base.astro";
     };
   }
 
-  nameInput.addEventListener("change", () => {
+  function leave(): void {
+    leaving = true;
+    window.clearInterval(pingTimer);
+    ws?.close();
+  }
+
+  // ── Actions ──────────────────────────────────────────────────────────────────────
+  function roll(): void {
+    if (!view || view.turn !== you || view.phase !== "roll") return;
+    startTumble(you);
+    send({ t: "roll" }, true);
+  }
+
+  function move(t: number): void {
+    if (!view || view.phase !== "move" || view.turn !== you || !view.legal.includes(t) || animating()) return;
+    send({ t: "move", token: t }, true);
+  }
+
+  function rememberName(): void {
     try {
-      localStorage.setItem("ludo-name", nameInput.value.trim());
+      localStorage.setItem("ludo-name", cleanName());
     } catch {
       // Remembering the name is a convenience only.
     }
+  }
+
+  const ABC = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const newCode = () => Array.from(crypto.getRandomValues(new Uint8Array(5)), (b) => ABC[b % ABC.length]).join("");
+
+  $<HTMLButtonElement>("[data-solo]").addEventListener("click", () => {
+    rememberName();
+    connect(`s-${hex(8)}`);
   });
-  $<HTMLButtonElement>("[data-solo]").addEventListener("click", () => connect(`s-${hex(8)}`));
-  $<HTMLButtonElement>("[data-new]").addEventListener("click", () => {
-    const abc = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-    codeInput.value = Array.from(crypto.getRandomValues(new Uint8Array(5)), (b) => abc[b % abc.length]).join("");
+  $<HTMLButtonElement>("[data-host]").addEventListener("click", () => {
+    rememberName();
+    connect(`c-${newCode()}`);
   });
-  $<HTMLButtonElement>("[data-join]").addEventListener("click", () => {
+  $<HTMLFormElement>("[data-join-form]").addEventListener("submit", (e) => {
+    e.preventDefault();
     const code = codeInput.value.trim().toUpperCase();
     if (!/^[A-Z0-9]{4,6}$/.test(code)) {
       codeInput.focus();
+      toast("Codes are 4–6 letters or numbers");
       return;
     }
+    rememberName();
     connect(`c-${code}`);
   });
+  startBtn.addEventListener("click", () => send({ t: "start" }, true));
+  $<HTMLButtonElement>("[data-rematch]").addEventListener("click", () => send({ t: "rematch" }, true));
+  $<HTMLButtonElement>("[data-newsolo]").addEventListener("click", () => {
+    leave();
+    connect(`s-${hex(8)}`);
+  });
+
+  async function shareInvite(): Promise<void> {
+    const url = inviteLink();
+    try {
+      if (navigator.share && window.matchMedia("(pointer: coarse)").matches) {
+        await navigator.share({ title: "Ludo", text: `Join my Ludo game (code ${room.slice(2)})`, url });
+        return;
+      }
+      await navigator.clipboard.writeText(url);
+      toast("Invite link copied");
+    } catch {
+      linkInput.select();
+      toast("Copy the link above");
+    }
+  }
+  copyBtn.addEventListener("click", () => void shareInvite());
+  inviteBtn.addEventListener("click", () => void shareInvite());
+
   rollBtn.addEventListener("click", roll);
   dieEl.addEventListener("click", roll);
-  document.addEventListener("keydown", (e) => {
-    if ((e.key === " " || e.key === "Enter") && document.activeElement === document.body) {
-      e.preventDefault();
-      roll();
-    }
-  });
-  startBtn.addEventListener("click", () => send({ t: "start" }, true));
   board.addEventListener("click", (e) => {
     if (!view || view.phase !== "move" || view.turn !== you) return;
     const rect = board.getBoundingClientRect();
     const x = ((e.clientX - rect.left) / rect.width) * N;
     const y = ((e.clientY - rect.top) / rect.height) * N;
     let best = -1;
-    let bestD = 0.9;
+    let bestD = 1.1; // generous: about a square in every direction, for thumbs
     view.legal.forEach((t) => {
       const [cx, cy] = at(you, t, view!.tokens[you]![t]!);
       const d = Math.hypot(cx - x, cy - y);
@@ -607,9 +990,88 @@ import Base from "../layouts/Base.astro";
         best = t;
       }
     });
-    if (best >= 0) send({ t: "move", token: best }, true);
+    if (best >= 0) move(best);
   });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && app.classList.contains("is-fs")) {
+      exitFullscreen();
+      return;
+    }
+    if (app.dataset.screen !== "game" || e.target instanceof HTMLInputElement) return;
+    if (e.key === " " || e.key === "Enter") {
+      if (document.activeElement instanceof HTMLButtonElement && document.activeElement !== dieEl) return;
+      e.preventDefault();
+      roll();
+    } else if (/^[1-4]$/.test(e.key)) {
+      move(Number(e.key) - 1);
+    }
+  });
+
+  // ── Full screen: the native API where it exists; a fixed overlay where it does not (iPhone Safari) ──
+  let pseudoFs = false;
+  function setFsUi(on: boolean): void {
+    app.classList.toggle("is-fs", on);
+    document.documentElement.classList.toggle("ludo-lock", on);
+    fsBtn.setAttribute("aria-pressed", String(on));
+    fsIcon.textContent = on ? "⤢" : "⛶";
+    fsLabel.textContent = on ? "Exit" : "Full screen";
+    fsBtn.title = on ? "Exit full screen" : "Full screen";
+    requestAnimationFrame(() => draw());
+  }
+
+  async function enterFullscreen(): Promise<void> {
+    if (app.requestFullscreen && document.fullscreenEnabled) {
+      try {
+        await app.requestFullscreen({ navigationUI: "hide" });
+        return; // fullscreenchange updates the UI
+      } catch {
+        // Fall through to the overlay.
+      }
+    }
+    pseudoFs = true;
+    setFsUi(true);
+    try {
+      history.pushState({ ludoFs: true }, ""); // so the phone's Back button leaves full screen, not the page
+    } catch {
+      // Without history, Esc and the Exit button still work.
+    }
+  }
+
+  function exitFullscreen(): void {
+    if (document.fullscreenElement) {
+      void document.exitFullscreen();
+      return;
+    }
+    if (pseudoFs) {
+      pseudoFs = false;
+      setFsUi(false);
+      if (history.state?.ludoFs) history.back();
+    }
+  }
+
+  fsBtn.addEventListener("click", () => (app.classList.contains("is-fs") ? exitFullscreen() : void enterFullscreen()));
+  document.addEventListener("fullscreenchange", () => setFsUi(document.fullscreenElement === app));
+  window.addEventListener("popstate", () => {
+    if (pseudoFs) {
+      pseudoFs = false;
+      setFsUi(false);
+    }
+  });
+
+  // ── Start-up ─────────────────────────────────────────────────────────────────────
+  try {
+    nameInput.value = localStorage.getItem("ludo-name") ?? "";
+  } catch {
+    // Storage blocked: the name field starts empty.
+  }
+  const invited = new URLSearchParams(location.search).get("code")?.toUpperCase() ?? "";
+  if (/^[A-Z0-9]{4,6}$/.test(invited)) {
+    codeInput.value = invited;
+    joinBtn.textContent = `Join game ${invited}`;
+    joinBtn.classList.add("primary");
+    (nameInput.value ? joinBtn : nameInput).focus();
+  }
   window.addEventListener("resize", () => draw());
-  window.setInterval(() => view?.turnEndsAt && render(), 1000);
+  renderNet();
   draw();
 </script>

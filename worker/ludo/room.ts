@@ -56,6 +56,7 @@ type Inbound =
   | { t: "roll" }
   | { t: "move"; token: number }
   | { t: "start" }
+  | { t: "rematch" }
   | { t: "ping" }
   | { t: "echo"; s: number }
   | { t: "name"; name: string | null };
@@ -71,6 +72,7 @@ function parse(raw: string | ArrayBuffer): Inbound | null {
   if (!m || typeof m !== "object" || Array.isArray(m)) return null;
   const o = m as Record<string, unknown>;
   switch (o.t) {
+    case "rematch":
     case "roll":
     case "start":
     case "ping":
@@ -223,6 +225,15 @@ export class LudoRoom extends DurableObject<Env> {
       if (g.phase !== "lobby") return this.send(ws, { t: "err", code: "already_started" });
       g.seats = g.seats.map((k) => (k === "empty" ? "bot" : k));
       this.begin(t0);
+    } else if (msg.t === "rematch") {
+      // Same room, same seats and names, a fresh seed. Only once the game is over, so nobody loses a live game.
+      if (g.phase !== "over") return this.send(ws, { t: "err", code: "game_in_progress" });
+      const seed = crypto.getRandomValues(new Uint32Array(1))[0]!;
+      this.game = start(newGame(seed, g.seats));
+      m.startedAt = t0;
+      m.turnStartedAt = t0;
+      m.promptAt = t0;
+      m.ended = false;
     } else {
       const action: Action = msg.t === "roll" ? { seat: att.seat, kind: "roll" } : { seat: att.seat, kind: "move", token: msg.token };
       const think = g.turn === att.seat && m.promptAt ? t0 - m.promptAt : null;
@@ -248,7 +259,7 @@ export class LudoRoom extends DurableObject<Env> {
       outcome: ms <= ACTION_GOOD_MS ? "ok" : "degraded",
       status: 200,
       ms,
-      detail: detail({ mode: m.mode, actor: "human", kind: msg.t }),
+      detail: detail({ mode: m.mode, actor: "human", kind: msg.t === "rematch" ? "start" : msg.t }),
       fault: activeFault(this.env),
     });
   }
@@ -257,7 +268,10 @@ export class LudoRoom extends DurableObject<Env> {
   private step(g: Game, a: Action): Game {
     const before = g.turn;
     let out = apply(g, a);
-    if (out.phase === "move" && out.legal.length === 1 && out.seats[out.turn] === "human") {
+    // No pointless taps: if every legal token sits on the same square, the choice cannot matter, so make it.
+    const mine = out.tokens[out.turn] ?? [];
+    const distinct = new Set(out.legal.map((t) => mine[t]));
+    if (out.phase === "move" && distinct.size === 1 && out.seats[out.turn] === "human") {
       out = apply(out, { seat: out.turn, kind: "move", token: out.legal[0]! });
     }
     const now = Date.now();
