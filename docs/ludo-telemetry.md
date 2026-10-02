@@ -55,5 +55,4 @@ The die is a button (or press Space): it tumbles from the click until the server
 
 - Client-perceived action time (send → board drawn) beaconed back. It is shown to the player now; sending it would be a second spoofable client signal, like Pulse run's.
 - Reconnect count and time-to-rejoin per seat.
-- Turn think time distribution (engagement, not reliability).
 - Storage: the action log is rewritten on every step (≈ 50 KB by game end). Fine at this scale; move to append-only SQL rows if rooms get busy.
