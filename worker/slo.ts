@@ -1,4 +1,4 @@
-// GET /api/slo?days=30: the ledger's window plus SLO math. Read by the dashboard and the daily Git export.
+// GET /api/slo?days=30: the ledger's window plus SLO math. Read by the dashboard (and, once built, the daily Git export).
 import type { Env } from "./env";
 import type { DayRow, EventRow, GameSummary, LedgerSource } from "./ledger";
 

@@ -2,7 +2,7 @@
 
 What is live, what is verified, what is pending. Rewrite this file at the end of every working session to match reality; replace, do not append.
 
-Last updated: 1 Oct 2026.
+Last updated: 2 Oct 2026.
 
 ## Live
 
@@ -25,12 +25,13 @@ Last updated: 1 Oct 2026.
 - Endpoint validation for `/api/rum` (origin, size, type, bounds), scripted playthroughs, the `game_js_error` game day, degrade-open behaviour, the Toronto-time boundaries across DST.
 - Live desk policy: the engine's live workflow runs with `TRIAGE_AUTO_APPLY=off`, so a confident Low still waits for `/approve` (engine test `test_live_desk_never_auto_applies_even_low`, ADR-021).
 - Desk records keep the rule they ran under (ADR-025): the one pre-ADR-021 ticket reads "auto-applied under the earlier low-risk rule"; the owner's latest `/note` shows on each ticket (issue #2 says game day 1's alert landed there).
-- Homepage copy: every figure traced to the résumé or Vikrant's confirmation before publishing (ADR-022).
+- Homepage copy: every figure traced to the résumé or the owner's confirmation before publishing (ADR-022).
 
 ## Pending
 
+- Game day 2 (2 Oct 2026, `FAULT=github_5xx`, held until the outside monitor went Down, then restored and worked through the gate on incident #3): write its record in `docs/gamedays/` from the template, including whether the alert reached the owner.
 - Cloudflare CI token expiry is still `TODO` in `docs/runbook.md`.
-- Alert channel: the alert mailbox is near capacity (game day 1, finding 7; owner: Vikrant).
+- Alert channel: the alert mailbox is near capacity (game day 1, finding 7; owner: site owner).
 - See [`ROADMAP.md`](ROADMAP.md) → Next.
 
 ## Token expiries

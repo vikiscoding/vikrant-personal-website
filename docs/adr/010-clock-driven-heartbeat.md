@@ -4,7 +4,7 @@ Status: Accepted, 29 Sep 2026. Amends ADR-003 and ADR-007. Moves the contact for
 
 ## Context
 
-The two documents disagree in a way neither one says out loud.
+The two design-review documents (kept outside this repo) disagree in a way neither one says out loud.
 
 - **Design v2**, after independent-review finding C1, made "synthetic probe results" the SLO population, but aimed the probe at `/api/contact`.
 - **The critique** wants "a path that already ticks, not hoping strangers use a form". Its step 4 says to defer the contact form, and the SRE seat's objection is "a dashboard of your own synthetic clicks".
@@ -14,7 +14,7 @@ Probing a contact form every 5 minutes is not workable in practice:
 1. It writes about 8,640 fake messages a month into D1 and sends as many emails. Or
 2. It gets a bypass (skip Turnstile, skip storage, skip email). Then the probe no longer tests the real path, and the SLO measures the bypass.
 
-Either way the SRE objection stands. The two fixes the critique offered are both unavailable: the other candidate is a client's live site (ADR-008), and the CanadaBuys job runs about 30 times a month, which is too few.
+Either way the SRE objection stands. The two fixes the critique offered are both unavailable: the other candidate is a client's live site (ADR-008), and the owner's other scheduled job runs about 30 times a month, which is too few.
 
 ## Decision
 

@@ -19,7 +19,7 @@ jobs:
       - run: npm run check
       - run: npm run build
       - run: npx wrangler deploy --dry-run
-      # Page-speed budget warns, never blocks (L2). Add in P0b once the domain is live.
+      # Page-speed budget (planned): warns, never blocks. Not added yet.
 
   deploy:
     needs: check

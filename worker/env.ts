@@ -1,6 +1,6 @@
 export interface Env {
   ASSETS: Fetcher;
-  /** Absent in P0a: the heartbeat is off and pages serve their fallback footer. */
+  /** Absent = heartbeat off: pages serve their fallback footer and /api/pulse returns 503 "disabled". */
   PULSE?: KVNamespace;
   SLI?: AnalyticsEngineDataset;
   VISITS?: DurableObjectNamespace<import("./visits").VisitCounter>;

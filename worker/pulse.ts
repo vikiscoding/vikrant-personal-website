@@ -41,7 +41,7 @@ export async function pulseApi(env: Env, ctx?: ExecutionContext): Promise<Respon
   const fault = activeFault(env);
   const headers = { "content-type": "application/json", "cache-control": "no-store" };
   if (!env.PULSE) {
-    // P0a: heartbeat not enabled yet. Not an SLI event.
+    // Heartbeat switched off (no PULSE binding). Not an SLI event.
     return new Response(JSON.stringify({ state: "disabled" }), { status: 503, headers });
   }
   try {
@@ -86,7 +86,7 @@ export function pulseText(p: Pulse): string | null {
 
 /** The footer's pulse slot: text to show (or null), and whether the page is degraded. Never throws. */
 async function pagePulse(env: Env): Promise<{ text: string | null; outcome: "ok" | "degraded"; detail?: string }> {
-  // P0a: heartbeat not enabled yet, so the static fallback footer is the intended page.
+  // Heartbeat switched off (no PULSE binding): the static fallback footer is the intended page.
   if (!env.PULSE) return { text: null, outcome: "ok", detail: "pulse_disabled" };
   try {
     const p = await readPulse(env);

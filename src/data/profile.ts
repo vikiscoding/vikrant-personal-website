@@ -1,5 +1,5 @@
 // The only place site copy lives. Pages render from this file.
-// Rules: never invent numbers, clients or testimonials. Every figure must trace to the résumé or Vikrant's confirmation.
+// Rules: never invent numbers, clients or testimonials. Every figure must trace to the résumé or the owner's confirmation.
 
 export interface Proof {
   title: string;
@@ -57,17 +57,17 @@ export function formatDate(iso: string): string {
   return `${d} ${MONTHS[(m ?? 1) - 1]} ${y}`;
 }
 
-// Homepage copy by Vikrant (1 Oct 2026, ADR-022), with factual corrections agreed in review:
+// Homepage copy by the owner (1 Oct 2026, ADR-022), with factual corrections agreed in review:
 // "IT services" not "software" for fifteen years (2009–2017 was IT operations); the ~95% is the infrastructure
 // for the 22 programs (résumé); the CompuCom team supported the estate, the integration was an SME role (résumé);
-// 55% / 35% are Vikrant's figures (not on the résumé); drafts are never sent by anyone.
+// 55% / 35% are the owner's figures (not on the résumé); drafts are never sent by anyone.
 export const profile = {
   name: "Vikrant Singh",
-  // Must match the LinkedIn headline (R2). Regenerate public/og.png when it changes (scripts/make-brand-assets.py).
+  // Must match the LinkedIn headline. Regenerate public/og.png when it changes (scripts/make-brand-assets.py).
   headline: "IT Operations and Engineering",
   description:
     "I've led teams, and I build hands-on: useful systems for businesses, including my own. Delivery across 22 programs at Citi, Sev-1 operations for a 3,000-server government estate, and a site that runs on its own SLOs.",
-  // Option A, chosen 1 Oct 2026: led teams and builds hands-on; "including my own" = this site and Balance-Books.
+  // Chosen 1 Oct 2026: led teams and builds hands-on; "including my own" = this site and Balance-Books.
   intro: "I've led teams, and I build hands-on: useful systems for businesses, including my own.",
   story: [
     "For fifteen years I've been accountable for IT services reaching people and staying up.",
@@ -117,7 +117,7 @@ export const profile = {
       ],
     },
     {
-      // Vikrant's own business (ADR-023). Read-only review 1 Oct 2026: /scorecard scores six questions out of 12 with a
+      // The owner's own business (ADR-023). Read-only review 1 Oct 2026: /scorecard scores six questions out of 12 with a
       // band and "where to tighten first"; the contact link carries the score, band and gaps, and the contact page
       // attaches them to the enquiry; Turnstile + /api/contact; MX via Cloudflare Email Routing. Never break it on purpose (ADR-008).
       title: "Balance-Books",

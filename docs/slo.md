@@ -1,8 +1,8 @@
 # SLOs
 
-Status: **draft targets.** They become real at the P2 entry gate, when the probe has run for 7 days. Revisit after the first 30-day window. Never tighten a target you have not met.
+Status: **draft targets**, measured since 30 Sep 2026. Revisit after the first 30-day window (30 Oct 2026). Never tighten a target that has not been met.
 
-Window: rolling 30 days. Sources: **black-box** (external probe) and **white-box** (Analytics Engine dataset `site_sli`, written by `worker/log.ts`).
+Window: rolling 30 days. Sources: **black-box** (external probe) and **white-box** (the SLI ledger, a Durable Object written by `worker/log.ts`; Analytics Engine dataset `site_sli` as well once it is enabled).
 
 ## SLO-1: Heartbeat freshness (black-box)
 
@@ -28,7 +28,7 @@ Window: rolling 30 days. Sources: **black-box** (external probe) and **white-box
 | --- | --- |
 | Page degraded rate (`op=page`, `outcome=degraded` / all) | Volume depends on visitors and crawlers. Promote once it exceeds about 1,000 events a month. |
 | Page Worker time p95 (`op=page`, `double2`) | Same reason. Page speed stays a CI budget (L2). |
-| **Client path (Pulse run, ADR-015, not built):** sessions started, game error rate, p95 frame time, % sessions with jank | Client-only and spoofable (public beacon). Shown as observations with the bound "Does not prove server capacity or ITSM readiness". Never an SLO or an alert |
+| **Client path (Pulse run, ADR-015):** sessions started, game error rate, p95 frame time, % sessions with jank | Client-only and spoofable (public beacon). Shown as observations with the bound "Does not prove server capacity or ITSM readiness". Never an SLO or an alert |
 
 ## Alerting
 
@@ -37,7 +37,7 @@ Window: rolling 30 days. Sources: **black-box** (external probe) and **white-box
 | P1 | Probe: 2 consecutive failures on `/api/pulse` | Uptime monitor's free email or push alert |
 | P2 | Burn-rate, two windows: **fast** 14.4× over 1 h (≈2 of 12 checks bad) pages; **slow** 6× over 6 h tickets | OTLP backend chosen in P2 (ADR-004) |
 
-## Query sketch (Analytics Engine SQL API)
+## Query sketch (Analytics Engine SQL API, once enabled)
 
 ```sql
 -- SLO-2, last 30 days. blob2 = outcome. Weight by _sample_interval for sampled rows.
@@ -62,7 +62,8 @@ Vendor retention is short (Workers Logs: a few days; UptimeRobot free: 30 days s
 - Postmortems use `events.csv` timelines. Game-day rows are filterable by `fault`.
 - Given up on purpose: recomputing past days under a stricter threshold. p95, max and `slow_good` bound it.
 - **Built 30 Sep 2026: the SLI ledger (ADR-012)** implements this principle inside Cloudflare (Durable Object `SliLedger`, `GET /api/slo?days=N`). Sources: `ticker` (SLO-2), `pulse` (white-box view of every probe hit), `page`.
-- Still to build: the daily Git export (reads `/api/slo` plus the UptimeRobot API for the black-box SLO-1) and the dashboard. Needs only `UPTIMEROBOT_API_KEY` (read-only) as a GitHub secret; no Cloudflare analytics token.
+- Built 30 Sep 2026: the dashboard at `/reliability/` (ADR-013).
+- Still to build: the daily Git export (reads `/api/slo` plus the UptimeRobot API for the black-box SLO-1). Needs only `UPTIMEROBOT_API_KEY` (read-only) as a GitHub secret; no Cloudflare analytics token.
 - Paging is **not** served from this history. Alerts stay live in UptimeRobot.
 
 ## Why this is not theatre

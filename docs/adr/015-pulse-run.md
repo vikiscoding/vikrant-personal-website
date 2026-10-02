@@ -1,6 +1,6 @@
 # ADR-015: Pulse run, a third exhibit as a client-path testbed
 
-Status: Accepted and **built 30 Sep 2026** (panel-approved scope, Vikrant). **Supersedes ADR-006 "two exhibits only" for this one bounded exhibit.** Files: `src/pages/play.astro`, `worker/rum.ts`, `worker/ledger.ts` (`addGame`, `game_sessions`), `worker/dashboard.ts` (`clientPath`).
+Status: Accepted and **built 30 Sep 2026** (panel-approved scope, owner). **Supersedes ADR-006 "two exhibits only" for this one bounded exhibit.** Files: `src/pages/play.astro`, `worker/rum.ts`, `worker/ledger.ts` (`addGame`, `game_sessions`), `worker/dashboard.ts` (`clientPath`).
 
 Found while building: static HTML carried an ETag, so a returning browser got `304` and reused stale edge-injected content (footer, dashboard, game fault). Pages are now served `no-store` with validators stripped; assets keep their 304s.
 
@@ -12,7 +12,7 @@ Found while building: static HTML carried an ETag, so a returning browser got `3
 
 The site's reliability story is all server side: the ticker, KV, the probe. Nothing shows the **client path**: what a visitor's browser actually experiences (script errors, frame drops). A tiny game is the cheapest honest way to generate real client-side signal on the same origin, so the dashboard can tell one story end to end.
 
-The risk is the rut named in the thesis: "prettier systems instead of the next verb". So the scope is fixed and there is a stop rule.
+The risk is scope creep: polishing a side system instead of shipping the next piece of real work. So the scope is fixed and there is a stop rule.
 
 ## Decision
 
@@ -23,7 +23,7 @@ Add **Pulse run**: a 30-second browser runner at `/play/`, shown as exhibit **th
 - One canvas or DOM runner: jump/duck, rising score, restart on hit. Keyboard **Space/↑** (jump), **↓** (duck); **tap** to jump on mobile.
 - Fixed-step loop on `requestAnimationFrame`. FPS or jank indicator only with `?debug=1`; the clean view by default.
 - **No** accounts, ads, WebGL, multiplayer, leaderboard, sound pipeline, or asset pipeline. No framework on the client.
-- **Stop rule:** no game two on this domain until the hiring exhibits are solid.
+- **Stop rule:** no game two on this domain until the existing exhibits are complete.
 
 ### Telemetry: the first public write endpoint (zero trust)
 
@@ -62,7 +62,7 @@ After a few days of quiet data, run one deliberate break through the existing de
 
 ## Rejected
 
-- The game as the homepage hero: it would bury the hiring exhibits.
+- The game as the homepage hero: it would bury the main exhibits.
 - A leaderboard or accounts: that means personal data, moderation and abuse handling, a product, not a testbed.
 - Analytics Engine or a third-party RUM vendor: it splits the story across systems and adds a vendor. The ledger already exists.
 - A request-time fault toggle (`?break=1`): an attack surface (ADR-005, ADR-010).

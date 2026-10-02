@@ -11,13 +11,13 @@
     // Non-HTML assets pass straight through servePage untouched.
     "run_worker_first": true
   },
-  // P0b: apex is canonical; www redirects to it in worker/index.ts. The zone is already on Cloudflare DNS.
+  // The apex is canonical; www redirects to it in worker/index.ts. The zone is already on Cloudflare DNS.
   // Custom domains create their own DNS records and certificates. Needs zone permissions on the deploy token.
   "routes": [
     { "pattern": "vikrantsingh.fyi", "custom_domain": true },
     { "pattern": "www.vikrantsingh.fyi", "custom_domain": true }
   ],
-  // Keep the workers.dev URL as a fallback while the domain settles. Turn off once P0b's gate is met.
+  // Keep the workers.dev URL as a fallback while the domain settles. Turn off once the custom domain has been stable for a while (ROADMAP: Parked).
   "workers_dev": true,
   // Local `wrangler dev` would otherwise present requests as http://vikrantsingh.fyi and trip the https redirect.
   "dev": { "host": "localhost" },
@@ -48,7 +48,7 @@
     "VISITS_MODE": "auto",
     "VISITS_THRESHOLD": "1000",
     // Reliability dashboard at /reliability/ (ADR-013): "off" | "auto" (once 30 days of data) | "on".
-    // "on" at Vikrant's request 30 Sep 2026 to review it live before publicising; switch to "auto" or "off" if needed.
+    // "on" at the owner's request 30 Sep 2026 to review it live before publicising; switch to "auto" or "off" if needed.
     "DASHBOARD_MODE": "on",
     "GITHUB_REPO": "vikiscoding/vikrant-personal-website",
     // Incident desk (ADR-016). Secret INCIDENTS_DISPATCH_TOKEN is set in the Cloudflare dashboard, never via a `!` prompt.

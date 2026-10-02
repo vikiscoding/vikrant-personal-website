@@ -19,7 +19,7 @@ Make the Incident-AI exhibit **live**: the agent handles this site's own failure
 ## Consequences
 
 - Secrets: `XAI_API_KEY` on the engine repo (optional; without it the model-down path runs). `INCIDENTS_DISPATCH_TOKEN` as a Worker secret (fine-grained, engine repo only, Contents read and write), set in the Cloudflare dashboard.
-- Game days (`FAULT=github_5xx`) now produce real incidents through the desk. That is the natural way to run the Stage 3 game day.
+- Game days (`FAULT=github_5xx`) now produce real incidents through the desk. That is the natural way to run the next game day.
 - Visitors cannot create incidents, and the desk shows nothing about visitors.
 - Verified 1 Oct 2026: GitHub smoke test #1 (manual alert, model down) went site raised → AI unavailable → human ACKNOWLEDGED → ACTIVE → RESOLVED → CLOSED, and was shown on the local dashboard from the live feed. Engine tests: 120 passed.
 

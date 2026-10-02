@@ -1,6 +1,6 @@
 # vikrantsingh.fyi
 
-The personal site of Vikrant Singh, **operated in public**. A static page on a CDN almost never fails, so its uptime proves nothing. This site runs one small dynamic path on purpose, and treats it like production: service level objectives, an outside probe, an incident desk with a human gate, game days and postmortems.
+A personal site, **operated in public**. A static page on a CDN almost never fails, so its uptime proves nothing. This site runs one small dynamic path on purpose, and treats it like production: service level objectives, an outside probe, an incident desk with a human gate, game days and postmortems.
 
 **Live:** [site](https://vikrantsingh.fyi) · [Live reliability](https://vikrantsingh.fyi/reliability/) · [postmortem: game day 1](https://vikrantsingh.fyi/notes/postmortem-game-day-1/) · [raw SLI data](https://vikrantsingh.fyi/api/slo?days=30)
 
@@ -33,7 +33,7 @@ The personal site of Vikrant Singh, **operated in public**. A static page on a C
 | Runbook, including game-day faults | [`docs/runbook.md`](docs/runbook.md) |
 | Game day 1: timeline and findings | [`docs/gamedays/`](docs/gamedays/) |
 | Log and SLI event schema | [`docs/log-schema.md`](docs/log-schema.md) |
-| Working rules for contributors and coding agents | [`AGENTS.md`](AGENTS.md) |
+| Working rules and conventions for contributors and coding agents | [`AGENTS.md`](AGENTS.md) |
 
 ## Deploy
 

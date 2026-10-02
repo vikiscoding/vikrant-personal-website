@@ -31,7 +31,7 @@ export function record(env: Env, ev: SliEvent, ctx?: ExecutionContext): void {
       doubles: [ev.status, ev.ms],
     });
   } catch {
-    // Telemetry export failing must never fail the request (Incident-AI §2.4).
+    // Telemetry export failing must never fail the request.
   }
   const source = ledgerSource(ev.op);
   if (ctx && env.LEDGER && source) {

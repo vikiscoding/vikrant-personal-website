@@ -2,7 +2,7 @@
 
 Time box: · Started:
 
-## Five questions before code (FIRST_PRINCIPLES §1)
+## Five questions before code
 
 1. Main output:
 2. Data flow:

@@ -1,6 +1,6 @@
 # Log schema (v1)
 
-One JSON line per unit of work, emitted by `worker/log.ts`. The same fields go to Workers Logs (console) and to Analytics Engine (`site_sli`). Neither shares a failure domain with KV, so a KV outage is still recorded.
+One JSON line per unit of work, emitted by `worker/log.ts`. The same fields go to Workers Logs (console), the SLI ledger and, once enabled, Analytics Engine (`site_sli`). None of them shares a failure domain with KV, so a KV outage is still recorded.
 
 Pulse run's browser events (`POST /api/rum`, ADR-015) are not log lines: they go straight to the ledger's `game_sessions` table and `frame`/`game` sources after validation.
 
