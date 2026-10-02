@@ -43,7 +43,7 @@
   ],
   "vars": {
     // Game-day switch. Changed only by a deploy, never by a request (ADR-010).
-    "FAULT": "none",
+    "FAULT": "github_5xx",
     // Counter flag: "off" = count silently, "auto" = show once total >= threshold, "on" = always show.
     "VISITS_MODE": "auto",
     "VISITS_THRESHOLD": "1000",
