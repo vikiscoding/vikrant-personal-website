@@ -17,6 +17,9 @@ import Base from "../layouts/Base.astro";
     <header class="bar">
       <span class="lights" aria-hidden="true"><i></i><i></i><i></i></span>
       <span class="title" data-title>Ludo</span>
+      <button type="button" class="bar-btn" data-chat-btn hidden aria-label="Room chat" aria-expanded="false">
+        <span aria-hidden="true">💬</span><span class="unread" data-unread hidden>0</span>
+      </button>
       <button type="button" class="bar-btn" data-invite hidden>Invite</button>
       <button type="button" class="bar-btn" data-fs aria-pressed="false" title="Full screen">
         <span data-fs-icon aria-hidden="true">⛶</span><span class="fs-label" data-fs-label>Full screen</span>
@@ -27,7 +30,7 @@ import Base from "../layouts/Base.astro";
     <div class="screen setup" data-view="setup">
       <label class="field">
         <span>Your name <em>(optional, shown to other players)</em></span>
-        <input data-name maxlength="16" autocomplete="nickname" spellcheck="false" placeholder="e.g. Asha" />
+        <input data-name maxlength="40" dir="auto" autocomplete="nickname" spellcheck="false" placeholder="e.g. Asha" />
       </label>
       <button type="button" class="primary big" data-solo>Play vs 3 bots</button>
       <button type="button" class="big" data-host>Play with friends</button>
@@ -48,6 +51,7 @@ import Base from "../layouts/Base.astro";
       </div>
       <button type="button" class="primary" data-start>Start now, bots fill empty seats</button>
       <p class="hint" data-lobby-hint>The game starts on its own when four players are in.</p>
+      <div class="chat-slot" data-slot-lobby></div>
     </div>
 
     <!-- Game -->
@@ -79,14 +83,31 @@ import Base from "../layouts/Base.astro";
           <div class="ticker" data-mine></div>
           <div data-others></div>
         </div>
+        <div class="chat-slot" data-slot-panel></div>
         <p class="net" data-net></p>
       </aside>
+    </div>
+
+    <!-- Room chat. One element, moved between the lobby, the side panel and this sheet as the layout needs. -->
+    <div class="sheet" data-sheet hidden role="dialog" aria-label="Room chat">
+      <div class="sheet-head"><span>Room chat</span><button type="button" class="sheet-close" data-sheet-close aria-label="Close chat">✕</button></div>
+      <div class="chat-slot" data-slot-sheet></div>
+    </div>
+    <div class="chat" data-chat hidden>
+      <ol class="msgs" data-msgs aria-live="polite" aria-label="Messages"></ol>
+      <div class="reacts" role="group" aria-label="Quick replies">
+        <button type="button" data-react="👍">👍</button><button type="button" data-react="😂">😂</button><button type="button" data-react="😮">😮</button><button type="button" data-react="🎲">🎲</button><button type="button" data-react="gg">gg</button><button type="button" data-react="nice!">nice!</button>
+      </div>
+      <form class="say" data-say>
+        <input data-say-input dir="auto" maxlength="600" autocomplete="off" enterkeyhint="send" placeholder="Message the room (any language)" aria-label="Message" />
+        <button type="submit" class="primary">Send</button>
+      </form>
     </div>
   </section>
 
   <p class="note">
-    Sent: your rolls and moves, a timing ping every 15 seconds, and the name you type, if any (shown only to players in
-    your room and cleared when the room empties). Stored as telemetry: timings and game outcomes, with no name, IP
+    Sent: your rolls and moves, a timing ping every 15 seconds, and the name and chat messages you type, if any (shown
+    only to players in your room, kept with the room and cleared when it empties). Stored as telemetry: timings and game outcomes, with no name, IP
     address or cookie. <a href="/privacy/">Privacy</a>
   </p>
   <p class="muted bound">Scope: a latency testbed with Ludo rules, not a product.</p>
@@ -124,6 +145,9 @@ import Base from "../layouts/Base.astro";
   .title { font-weight: 650; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .bar-btn { font: inherit; font-size: 0.875rem; padding: 0.3rem 0.7rem; border-radius: 999px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); cursor: pointer; display: inline-flex; gap: 0.35rem; align-items: center; min-height: 2.1rem; }
   .bar-btn[hidden] { display: none; }
+  .bar-btn[data-chat-btn] { position: relative; }
+  .unread { position: absolute; top: -0.35rem; right: -0.35rem; min-width: 1.15rem; height: 1.15rem; padding: 0 0.25rem; border-radius: 999px; background: #d64545; color: #fff; font-size: 0.6875rem; font-weight: 700; display: grid; place-items: center; }
+  .unread[hidden] { display: none; }
   .bar-btn [data-fs-icon] { font-size: 1.05rem; line-height: 1; }
 
   .screen { display: none; padding: 1.25rem; }
@@ -159,7 +183,7 @@ import Base from "../layouts/Base.astro";
   .invite input { flex: 1; min-width: 0; font-size: 0.875rem; }
 
   /* Game */
-  .game { grid-template-columns: minmax(0, 1fr) 15rem; gap: 1.25rem; align-items: start; }
+  .game { grid-template-columns: minmax(0, 1fr) 18rem; gap: 1.25rem; align-items: start; }
   .board-wrap { position: relative; width: 100%; aspect-ratio: 1; }
   canvas { width: 100%; height: 100%; display: block; border-radius: 8px; touch-action: manipulation; cursor: pointer; }
   .toast {
@@ -176,8 +200,10 @@ import Base from "../layouts/Base.astro";
   .winner { font-size: 1.6rem; font-weight: 750; margin: 0; }
   .over-actions { display: flex; gap: 0.6rem; justify-content: center; flex-wrap: wrap; }
 
-  .panel { display: grid; gap: 0.6rem; align-content: start; }
-  .you { margin: 0; font-weight: 700; display: flex; align-items: center; gap: 0.5rem; }
+  /* min-width: 0 lets long names and chat wrap inside the column instead of widening (and clipping) it. */
+  .panel { display: grid; gap: 0.6rem; align-content: start; min-width: 0; }
+  .panel > * { min-width: 0; }
+  .you { margin: 0; font-weight: 700; display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; overflow-wrap: anywhere; }
   :global(.you i) { width: 1.1rem; height: 1.1rem; border-radius: 50%; display: inline-block; border: 2px solid #fff; box-shadow: 0 0 0 2px var(--fg); flex: none; }
   .status { margin: 0; min-height: 2.6em; }
   .dice-row { display: flex; align-items: center; gap: 0.75rem; }
@@ -217,6 +243,35 @@ import Base from "../layouts/Base.astro";
   :global(.chip) { min-width: 1.5rem; height: 1.5rem; border-radius: 0.35rem; display: inline-grid; place-items: center; font-size: 0.8125rem; font-weight: 700; color: #fff; font-variant-numeric: tabular-nums; }
   :global(.chip.six) { outline: 2px solid var(--fg); outline-offset: 1px; }
   :global(.chip.latest) { transform: scale(1.12); }
+  /* ── Room chat ── */
+  .chat { display: grid; gap: 0.5rem; min-width: 0; border: 1px solid var(--line); border-radius: 10px; padding: 0.6rem; background: var(--bg); }
+  .chat[hidden] { display: none; }
+  .msgs { list-style: none; margin: 0; padding: 0 0.15rem; display: flex; flex-direction: column; gap: 0.4rem; overflow-y: auto; max-height: 12rem; min-height: 4.5rem; overscroll-behavior: contain; }
+  :global(.msg) { max-width: 85%; display: grid; gap: 0.1rem; }
+  :global(.msg .meta) { font-size: 0.6875rem; color: var(--muted); display: flex; gap: 0.35rem; align-items: center; }
+  :global(.msg .meta i) { width: 0.55rem; height: 0.55rem; border-radius: 50%; display: inline-block; }
+  :global(.msg .bubble) { margin: 0; padding: 0.4rem 0.65rem; border-radius: 12px 12px 12px 4px; background: var(--surface, #f3f2ee); border: 1px solid var(--line); overflow-wrap: anywhere; line-height: 1.4; font-size: 0.9375rem; }
+  :global(.msg.mine) { align-self: flex-end; }
+  :global(.msg.mine .meta) { justify-content: flex-end; }
+  :global(.msg.mine .bubble) { border-radius: 12px 12px 4px 12px; color: #fff; border-color: transparent; }
+  :global(.msgs .empty) { color: var(--muted); font-size: 0.8125rem; text-align: center; margin: auto 0; }
+  .reacts { display: flex; gap: 0.3rem; flex-wrap: wrap; }
+  .reacts button { min-height: 2.1rem; padding: 0.2rem 0.6rem; border-radius: 999px; font-size: 0.9375rem; }
+  .say { display: flex; gap: 0.4rem; }
+  /* width: 0 + flex: 1 makes the field fill what Send leaves, instead of keeping its default size and pushing Send out. */
+  .say input { flex: 1; width: 0; min-width: 0; }
+  .say button { flex: none; padding-inline: 0.85rem; }
+  .lobby .msgs { max-height: 14rem; }
+  .sheet {
+    position: absolute; left: 0; right: 0; bottom: 0; z-index: 5; max-height: 70%; display: flex; flex-direction: column;
+    background: var(--bg); border-top: 1px solid var(--line); border-radius: 16px 16px 0 0; box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.25);
+    padding: 0.5rem 0.75rem max(0.75rem, env(safe-area-inset-bottom));
+  }
+  .sheet[hidden] { display: none; }
+  .sheet-head { display: flex; align-items: center; justify-content: space-between; font-weight: 650; padding: 0.15rem 0 0.5rem; }
+  .sheet-close { min-height: 2.25rem; padding: 0.2rem 0.7rem; }
+  .sheet .chat { border: 0; padding: 0; flex: 1; min-height: 0; grid-template-rows: 1fr auto auto; }
+  .sheet .msgs { max-height: none; }
   .net { margin: 0; font-size: 0.75rem; color: var(--muted); font-variant-numeric: tabular-nums; }
   .note { font-size: 0.875rem; }
 
@@ -309,6 +364,18 @@ import Base from "../layouts/Base.astro";
   const mineEl = $<HTMLElement>("[data-mine]");
   const othersEl = $<HTMLElement>("[data-others]");
   const netEl = $<HTMLElement>("[data-net]");
+  const chatEl = $<HTMLElement>("[data-chat]");
+  const msgsEl = $<HTMLOListElement>("[data-msgs]");
+  const sayForm = $<HTMLFormElement>("[data-say]");
+  const sayInput = $<HTMLInputElement>("[data-say-input]");
+  const sheetEl = $<HTMLElement>("[data-sheet]");
+  const chatBtn = $<HTMLButtonElement>("[data-chat-btn]");
+  const unreadEl = $<HTMLElement>("[data-unread]");
+  const slots = {
+    lobby: $<HTMLElement>("[data-slot-lobby]"),
+    panel: $<HTMLElement>("[data-slot-panel]"),
+    sheet: $<HTMLElement>("[data-slot-sheet]"),
+  };
 
   const COLORS = ["#d64545", "#2f9e57", "#d9a400", "#2f6fd6"];
   const NAMES = ["Red", "Green", "Yellow", "Blue"];
@@ -724,6 +791,7 @@ import Base from "../layouts/Base.astro";
   function setScreen(s: "setup" | "lobby" | "game"): void {
     if (app.dataset.screen === s) return;
     app.dataset.screen = s;
+    placeChat();
     if (s === "game") requestAnimationFrame(() => draw());
   }
 
@@ -739,7 +807,10 @@ import Base from "../layouts/Base.astro";
       })
       .join("");
     const n = v.seats.filter((k) => k === "human").length;
-    lobbyHint.textContent = n < 4 ? `${n} of 4 here. The game starts on its own at four, or start now and bots take the empty seats.` : "Everyone is here.";
+    const bots = 4 - n;
+    startBtn.textContent = bots > 0 ? `Start now with ${bots} bot${bots === 1 ? "" : "s"}` : "Start now";
+    lobbyHint.textContent =
+      n < 4 ? `${n} of 4 here. The game starts on its own when four are in, or start now and bots take the empty seats.` : "Everyone is here.";
     linkInput.value = inviteLink();
   }
 
@@ -783,6 +854,108 @@ import Base from "../layouts/Base.astro";
     }
   }
 
+
+  // ── Room chat (code rooms) ─────────────────────────────────────────────────────────
+  // Text arrives already cleaned by the server (any language, no control or bidi-override characters). It is rendered
+  // with textContent-safe escaping and dir="auto", so Arabic or Hebrew reads right to left inside a left-to-right page.
+  type ChatLine = { id: number; seat: number; name: string; text: string; at: number };
+  const chatLines: ChatLine[] = [];
+  let unread = 0;
+  let sheetOpen = false;
+  const wideQuery = window.matchMedia("(min-width: 761px)");
+  const isCodeRoom = () => room.startsWith("c-");
+  const timeOf = (at: number) => new Date(at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+
+  /** Where the chat lives: inline in the lobby, in the side panel on wide screens, or in a slide-up sheet. */
+  function chatHome(): keyof typeof slots | null {
+    if (!isCodeRoom()) return null;
+    if (app.dataset.screen === "lobby") return "lobby";
+    if (app.dataset.screen === "game") return wideQuery.matches && !app.classList.contains("is-fs") ? "panel" : "sheet";
+    return null;
+  }
+
+  function chatVisible(): boolean {
+    const home = chatHome();
+    return home === "lobby" || home === "panel" || (home === "sheet" && sheetOpen);
+  }
+
+  function placeChat(): void {
+    const home = chatHome();
+    chatEl.hidden = home === null;
+    if (home && chatEl.parentElement !== slots[home]) slots[home].appendChild(chatEl);
+    chatBtn.hidden = home !== "sheet";
+    if (home !== "sheet") setSheet(false);
+    if (chatVisible()) setUnread(0);
+  }
+
+  function setUnread(n: number): void {
+    unread = n;
+    unreadEl.hidden = n === 0;
+    unreadEl.textContent = n > 9 ? "9+" : String(n);
+    chatBtn.setAttribute("aria-label", n ? `Room chat, ${n} unread` : "Room chat");
+  }
+
+  function setSheet(open: boolean): void {
+    sheetOpen = open;
+    sheetEl.hidden = !open;
+    chatBtn.setAttribute("aria-expanded", String(open));
+    if (open) {
+      setUnread(0);
+      msgsEl.scrollTop = msgsEl.scrollHeight;
+      sayInput.focus({ preventScroll: true });
+    }
+  }
+
+  function renderChat(): void {
+    const nearBottom = msgsEl.scrollHeight - msgsEl.scrollTop - msgsEl.clientHeight < 40;
+    msgsEl.innerHTML = chatLines.length
+      ? chatLines
+          .map((l) => {
+            const mine = l.seat === you;
+            const colour = COLORS[l.seat] ?? "#888";
+            return `<li class="msg${mine ? " mine" : ""}"><span class="meta"><i style="background:${colour}"></i><bdi>${esc(mine ? "You" : l.name)}</bdi> · ${esc(timeOf(l.at))}</span><p class="bubble" dir="auto"${
+              mine ? ` style="background:${colour}"` : ""
+            }>${esc(l.text)}</p></li>`;
+          })
+          .join("")
+      : '<li class="empty">No messages yet. Say hi 👋</li>';
+    if (nearBottom || chatLines.at(-1)?.seat === you) msgsEl.scrollTop = msgsEl.scrollHeight;
+  }
+
+  function onChat(lines: ChatLine[], replace: boolean): void {
+    if (replace) chatLines.length = 0;
+    let fresh = 0;
+    for (const l of lines) {
+      if (chatLines.some((x) => x.id === l.id)) continue;
+      chatLines.push(l);
+      if (!replace && l.seat !== you) fresh++;
+    }
+    chatLines.splice(0, Math.max(0, chatLines.length - 30));
+    renderChat();
+    if (fresh && !chatVisible()) {
+      setUnread(unread + fresh);
+      const last = chatLines.at(-1)!;
+      const preview = [...last.text].slice(0, 40).join("");
+      toast(`${last.name}: ${preview}${[...last.text].length > 40 ? "…" : ""}`);
+    }
+  }
+
+  function say(text: string): void {
+    const t = text.replace(/\s+/g, " ").trim();
+    if (!t) return;
+    send({ t: "say", text: t });
+  }
+
+  sayForm.addEventListener("submit", (e) => {
+    e.preventDefault();
+    say(sayInput.value);
+    sayInput.value = "";
+  });
+  chatEl.querySelectorAll<HTMLButtonElement>("[data-react]").forEach((b) => b.addEventListener("click", () => say(b.dataset.react!)));
+  chatBtn.addEventListener("click", () => setSheet(!sheetOpen));
+  $<HTMLButtonElement>("[data-sheet-close]").addEventListener("click", () => setSheet(false));
+  wideQuery.addEventListener("change", placeChat);
+
   // ── Connection ───────────────────────────────────────────────────────────────────
   let ws: WebSocket | null = null;
   let pendingAt: number | null = null;
@@ -825,11 +998,15 @@ import Base from "../layouts/Base.astro";
     view = null;
     anims.clear();
     overEl.hidden = true;
+    chatLines.length = 0;
+    setUnread(0);
+    renderChat();
     const code = r.startsWith("c-") ? r.slice(2) : null;
     titleEl.textContent = code ? `Ludo · room ${code}` : "Ludo · solo vs 3 bots";
     inviteBtn.hidden = !code;
     statusEl.textContent = "Connecting…";
     setScreen(code ? "lobby" : "game");
+    placeChat();
     if (code) {
       seatsEl.innerHTML = "";
       linkInput.value = inviteLink();
@@ -878,10 +1055,16 @@ import Base from "../layouts/Base.astro";
         }
         prev = before;
         render();
+      } else if (m.t === "chat") {
+        onChat(m.lines as ChatLine[], m.replace === true);
       } else if (m.t === "err") {
+        if (m.code === "slow_down") {
+          toast("Easy there: a few messages at a time");
+          return;
+        }
         pendingAt = null;
         if (m.code === "bad_message" && cleanName()) {
-          toast("That name can't be used: letters, numbers, spaces and - _ . ' only");
+          toast("That name can't be used: up to 16 letters or numbers in any language, spaces and - _ . '");
           return;
         }
         if (view) showFace(view.rolls[view.lastRoller ?? view.turn]?.at(-1) ?? null, view.lastRoller ?? view.turn);
@@ -993,6 +1176,10 @@ import Base from "../layouts/Base.astro";
     if (best >= 0) move(best);
   });
   document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && sheetOpen) {
+      setSheet(false);
+      return;
+    }
     if (e.key === "Escape" && app.classList.contains("is-fs")) {
       exitFullscreen();
       return;
@@ -1016,6 +1203,7 @@ import Base from "../layouts/Base.astro";
     fsIcon.textContent = on ? "⤢" : "⛶";
     fsLabel.textContent = on ? "Exit" : "Full screen";
     fsBtn.title = on ? "Exit full screen" : "Full screen";
+    placeChat();
     requestAnimationFrame(() => draw());
   }
 
@@ -1072,6 +1260,7 @@ import Base from "../layouts/Base.astro";
     (nameInput.value ? joinBtn : nameInput).focus();
   }
   window.addEventListener("resize", () => draw());
+  renderChat();
   renderNet();
   draw();
 </script>

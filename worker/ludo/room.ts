@@ -7,6 +7,7 @@ import type { Env } from "../env";
 import { activeFault } from "../faults";
 import { record, type SliEvent } from "../log";
 import { detail } from "./telemetry";
+import { cleanChat, cleanName } from "./text";
 import { apply, autoAction, bestMove, newGame, SEATS, start, type Action, type Game, type SeatKind } from "./engine";
 
 /** Pacing and patience budgets (docs/ludo-telemetry.md). */
@@ -18,18 +19,24 @@ export const RTT_GOOD_MS = 300;
 export const BOT_LAG_GOOD_MS = 250;
 export const LOBBY_GOOD_MS = 120_000;
 
-const MAX_MSG_BYTES = 256;
+/** Room chat can carry 200 characters in any script; joined emoji and combining marks make that up to ~4 KB of JSON. */
+const MAX_MSG_BYTES = 4096;
+/** Room chat (code rooms only): kept in the room's storage only, cleared with the names when the room empties. */
+const CHAT_KEEP = 30;
+const CHAT_WINDOW_MS = 10_000;
+const CHAT_MAX_PER_WINDOW = 5;
+const CHAT_MIN_GAP_MS = 600;
 const MAX_SOCKETS = 8;
 const RATE_WINDOW_MS = 10_000;
 const RATE_MAX = 40;
 const KEY = /^[a-f0-9]{16}$/;
-/** Display names: optional, 1–16 letters, digits, spaces and - _ . ' only. Kept in the room, never in telemetry. */
-const NAME = /^[\p{L}\p{N}][\p{L}\p{N} _.'-]{0,15}$/u;
-
-export function cleanName(v: unknown): string | null {
-  if (typeof v !== "string") return null;
-  const s = v.normalize("NFC").replace(/\s+/g, " ").trim();
-  return NAME.test(s) ? s : null;
+export interface ChatLine {
+  id: number;
+  seat: number;
+  /** The sender's name (or colour) when they wrote it. */
+  name: string;
+  text: string;
+  at: number;
 }
 
 interface Meta {
@@ -44,12 +51,19 @@ interface Meta {
   ended: boolean;
   /** Optional display names per seat; cleared when the last player leaves. */
   names?: (string | null)[];
+  /** Room chat, newest last, at most CHAT_KEEP lines; cleared when the last player leaves. */
+  chat?: ChatLine[];
+  chatSeq?: number;
 }
 
 interface Attachment {
   seat: number;
   n: number;
   windowStart: number;
+  /** Chat rate limit: messages in the current window, and the time of the last one. */
+  chatN?: number;
+  chatWindow?: number;
+  chatLast?: number;
 }
 
 type Inbound =
@@ -59,7 +73,8 @@ type Inbound =
   | { t: "rematch" }
   | { t: "ping" }
   | { t: "echo"; s: number }
-  | { t: "name"; name: string | null };
+  | { t: "name"; name: string | null }
+  | { t: "say"; text: string };
 
 function parse(raw: string | ArrayBuffer): Inbound | null {
   if (typeof raw !== "string" || raw.length > MAX_MSG_BYTES) return null;
@@ -79,6 +94,10 @@ function parse(raw: string | ArrayBuffer): Inbound | null {
       return { t: o.t };
     case "move":
       return Number.isInteger(o.token) && (o.token as number) >= 0 && (o.token as number) < 4 ? { t: "move", token: o.token as number } : null;
+    case "say": {
+      const text = cleanChat(o.text);
+      return text ? { t: "say", text } : null;
+    }
     case "name": {
       if (o.name === null || o.name === "") return { t: "name", name: null };
       const name = cleanName(o.name);
@@ -158,6 +177,7 @@ export class LudoRoom extends DurableObject<Env> {
     await this.save();
     await this.schedule();
     this.broadcast();
+    if (m.mode === "code") this.send(server, { t: "chat", lines: m.chat ?? [], replace: true }); // history for a (re)joining player
     return new Response(null, { status: 101, webSocket: client });
   }
 
@@ -197,6 +217,26 @@ export class LudoRoom extends DurableObject<Env> {
     if (!msg) return this.send(ws, { t: "err", code: "bad_message" });
 
     if (msg.t === "ping") return this.send(ws, { t: "probe", s: t0 });
+    if (msg.t === "say") {
+      await this.load();
+      const m = this.meta;
+      if (!m || m.mode !== "code") return this.send(ws, { t: "err", code: "no_chat_here" });
+      const windowStart = att.chatWindow ?? 0;
+      const inWindow = t0 - windowStart <= CHAT_WINDOW_MS ? (att.chatN ?? 0) : 0;
+      if (inWindow >= CHAT_MAX_PER_WINDOW || t0 - (att.chatLast ?? 0) < CHAT_MIN_GAP_MS) return this.send(ws, { t: "err", code: "slow_down" });
+      att.chatN = inWindow + 1;
+      att.chatWindow = inWindow === 0 ? t0 : windowStart;
+      att.chatLast = t0;
+      ws.serializeAttachment(att);
+      const seq = (m.chatSeq ?? 0) + 1;
+      const line: ChatLine = { id: seq, seat: att.seat, name: m.names?.[att.seat] ?? ["Red", "Green", "Yellow", "Blue"][att.seat]!, text: msg.text, at: t0 };
+      m.chatSeq = seq;
+      m.chat = [...(m.chat ?? []), line].slice(-CHAT_KEEP);
+      await this.ctx.storage.put("meta", m);
+      // Chat is content people wrote: it goes to the room and its storage only, never to telemetry or logs.
+      for (const s of this.ctx.getWebSockets()) this.send(s, { t: "chat", lines: [line] });
+      return;
+    }
     if (msg.t === "name") {
       await this.load();
       if (!this.meta) return;
@@ -365,7 +405,8 @@ export class LudoRoom extends DurableObject<Env> {
       });
     }
     m.due = null;
-    m.names = [null, null, null, null]; // names live only while someone is in the room
+    m.names = [null, null, null, null]; // names and chat live only while someone is in the room
+    m.chat = [];
     await this.ctx.storage.deleteAlarm();
     await this.save();
   }

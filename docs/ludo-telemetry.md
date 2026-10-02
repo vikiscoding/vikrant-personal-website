@@ -60,9 +60,24 @@ UX review, 2 Oct 2026 (panel: game UX designer, mobile and accessibility special
 | Feedback | The die tumbles until the server's number arrives (at least 350 ms) and keeps the last face; a countdown ring around it shows the 15 s prompt; the die pulses when it is your turn and the phone vibrates briefly. Toasts over the board centre announce captures and tokens reaching home (also read out by screen readers). Rolls tickers: your last 10, each opponent's last 5. |
 | Phones | **Full screen** button in the window's title bar: the Fullscreen API where available, otherwise (iPhone Safari) a fixed full-viewport overlay with safe-area padding and page scroll locked. Back, Esc or the Exit button leave it. Portrait puts the board on top at full width with controls below; landscape puts them side by side with the panel scrolling on its own. Tap targets are at least 44 px; the board ignores double-tap zoom. |
 | Keyboard | Space or Enter rolls; 1–4 moves that token. |
+| Room chat | Code rooms only (solo has nobody to read it). One chat element, placed inline in the lobby, in the side panel on wide screens, and in a slide-up sheet (💬 button with an unread badge, preview toast) on phones and in full screen. Bubbles: yours on the right in your colour, others on the left with name and colour dot. Quick replies: 👍 😂 😮 🎲 gg nice!. A player who rejoins gets the history. |
+| Two players and bots | The lobby button says exactly what happens ("Start now with 2 bots"); bots take the empty seats and play seeded random moves. |
 | Privacy and telemetry | No new telemetry; full-screen use is not tracked. |
 
 Verified on the dev Worker: phone (390 × 844) and desktop renders of every screen, portrait and landscape full screen; a lobby, *Start now* and the rematch guard over live WebSockets; a full four-player game (583 moves) followed by a rematch.
+
+## Text people type: any language
+
+Names and chat are checked on the server by pure functions in `worker/ludo/text.ts` (unit-testable outside Workers):
+
+- **Kept:** every script's letters with their combining marks, digits, the zero-width non-joiner and joiner (Persian and Indic scripts, joined emoji), direction marks, emoji with skin tones and flags.
+- **Removed:** control characters, and the bidi embedding and override characters (U+202A–202E, U+2066–2069) that can visually reorder text to spoof it.
+- **Limits** count what a reader sees (grapheme clusters via `Intl.Segmenter`): names 1–16, chat 1–200, plus a size cap.
+- **Display:** escaped, with `dir="auto"`, so right-to-left text reads correctly inside a left-to-right page.
+- **Chat limits:** 5 messages per 10 s per player, at least 0.6 s apart; the room keeps the last 30.
+- **Privacy:** names and chat live only in the room's storage, are cleared when the last player leaves, and never go into telemetry or logs.
+
+Verified: 18 sample messages (Hindi, Tamil, Bengali, Punjabi, Arabic, Hebrew, Persian, Chinese, Japanese, Korean, Thai, Russian, Greek, Vietnamese, Amharic, joined emoji, flags and skin tones, mixed direction) pass unchanged; names in Devanagari, Arabic, Chinese, Thai and Persian are accepted; overrides, control characters, markup and over-long input are rejected or stripped. Live on the dev Worker: two players chatted in four scripts, the rate limit held, they started with two bots, and a rejoining player got the history.
 
 ## Telemetry not built yet
 
