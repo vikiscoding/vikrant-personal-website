@@ -46,6 +46,15 @@ SLO-1 for a 30-day window = the monitor's 30-day uptime %. Export or screenshot 
 - **Incident desk dispatch token expiry:** **Thu 30 Sep 2027** (Worker secret `INCIDENTS_DISPATCH_TOKEN`; fine-grained, engine repo only, Contents read and write). Renew by 23 Sep 2027 in the Cloudflare dashboard. If it lapses, alerts stay `pending` in KV `incident:state` and no incident opens (UptimeRobot still pages).
 - **Cloudflare API token expiry (CI/CD):** date `TODO`. When it expires, every deploy fails with an authentication error. Renew 7 days before: new token, same permissions, update the `CLOUDFLARE_API_TOKEN` repo secret, and re-run the last `ci-cd` workflow.
 
+## Free-tier allowance used up
+
+Symptom: `/reliability/` says "Live numbers are paused until the daily allowance resets"; `/api/slo` answers 503 `{"error":"capacity"}`; Ludo shows "Ludo is napping"; logs say `Exceeded allowed rows written in Durable Objects free tier`.
+
+1. **Not an incident.** Pages, the heartbeat and the outside probe are unaffected; nothing pages. The allowances reset at 00:00 UTC.
+2. **Find the cause** before it happens again: what wrote so much? (2 Oct 2026: two load tests on the dev Worker, which shares the account's allowance.) See `docs/incidents/2026-10-02-free-tier-writes.md`.
+3. **Check the gap** is open (`npx wrangler kv key get --binding PULSE --remote ledger:gap`); the backfill below rebuilds the missed records after the reset.
+4. **Stop** any load test or bulk job on the dev Worker until the reset.
+
 ## Ledger outage and backfill (ADR-028)
 
 Rule: if the SLI ledger cannot record (a free-tier allowance used up, or any outage), what it missed is rebuilt from Workers Logs on the next restore. It never raises an incident.

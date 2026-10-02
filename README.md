@@ -19,7 +19,7 @@ A personal site, **operated in public**. A static page on a CDN almost never fai
 
 - **Pages** are static HTML (Astro) served by one Cloudflare Worker, which fills the footer with "Last shipped · build status · checked N min ago". If anything dynamic fails, the page still serves (degrade open).
 - **`/api/pulse`** returns 200 while the snapshot is under 35 minutes old. An outside probe checks it every 5 minutes; that is SLO-1.
-- **The SLI ledger** records every scheduled run, probe hit, page view and game event: failures in full, successes counted. The [dashboard](https://vikrantsingh.fyi/reliability/) and `/api/slo` read it.
+- **The SLI ledger** records every scheduled run, probe hit, page view and game event: failures in full, successes counted. The [dashboard](https://vikrantsingh.fyi/reliability/) and `/api/slo` read it. If it cannot be written (for example, the free tier's daily allowance runs out), every event is still in Workers Logs and the missed ones are rebuilt from there on the next healthy run.
 - **The incident desk:** after two failed runs, the Worker raises an incident in the [incident engine](https://github.com/vikiscoding/vikrant_perswebsite_incidents_aiengine). An AI proposes triage and drafts that are never sent; every later step is a human command on a GitHub Issue.
 - **Pulse run** (`/play/`) is a 30-second browser game whose errors and frame times are the client-side signal.
 - **Ludo** (`/ludo/`) is a server-authoritative multiplayer game (bots, invite links, room chat) whose connects, moves and round trips are timed on the server: the server-path signal ([docs/ludo-telemetry.md](docs/ludo-telemetry.md)).
@@ -33,6 +33,7 @@ A personal site, **operated in public**. A static page on a CDN almost never fai
 | SLOs and their error budgets | [`docs/slo.md`](docs/slo.md) |
 | Runbook, including game-day faults | [`docs/runbook.md`](docs/runbook.md) |
 | Game day 1: timeline and findings | [`docs/gamedays/`](docs/gamedays/) |
+| Real incidents: timeline and findings | [`docs/incidents/`](docs/incidents/) |
 | Log and SLI event schema | [`docs/log-schema.md`](docs/log-schema.md) |
 | Working rules and conventions for contributors and coding agents | [`AGENTS.md`](AGENTS.md) |
 

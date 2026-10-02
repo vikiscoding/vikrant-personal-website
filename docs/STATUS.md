@@ -2,21 +2,21 @@
 
 What is live, what is verified, what is pending. Rewrite this file at the end of every working session to match reality; replace, do not append.
 
-Last updated: 2 Oct 2026.
+Last updated: 2 Oct 2026 (evening, after the free-tier incident).
 
 ## Live
 
 | Component | State |
 | --- | --- |
 | Site | https://vikrantsingh.fyi on Cloudflare Workers; `main` deploys through GitHub Actions; `http` and `www` redirect to the apex |
-| Homepage | Headline "IT Operations and Engineering"; the record (Citi/Virtusa, Ontario/CompuCom); "Proof you can open": this site's reliability (Pulse run inside it), the incident desk, Balance-Books, Atlas Flow's live site; "Scope:" lines (ADR-022, ADR-023). Nav: Home · Live reliability · Writing · Play (ADR-024) |
+| Homepage | Headline "IT Operations and Engineering"; the record (Citi/Virtusa, Ontario/CompuCom); "Proof you can open": this site's reliability (Pulse run and Ludo inside it, both postmortems linked), the incident desk, Balance-Books, Atlas Flow's live site; "Scope:" lines (ADR-022, ADR-023). Nav: Home · Live reliability · Writing · Play (ADR-024) |
 | Heartbeat | Cron every 10 min fetches this repo's latest commit and CI status from GitHub into KV; the footer shows it; `/api/pulse` returns 200 while the snapshot is under 35 min old |
 | Outside probe | UptimeRobot keyword monitor on `/api/pulse` every 5 min; email alerts. SLO clock Day 0 = 30 Sep 2026 |
-| SLI ledger | Durable Object `SliLedger`: daily counts and histograms per source, failures in full; public `/api/slo?days=N` |
-| Dashboard | `/reliability/` (flag `DASHBOARD_MODE=on`): summary, live state with Degraded when the latest run failed, SLO cards, 30-day strip, speed, failures, incident desk, client path |
+| SLI ledger | Durable Object `SliLedger`: daily counts and histograms per source, failures in full; public `/api/slo?days=N` (503 `capacity` with `Retry-After` when the free-tier allowance is used up). Refused writes are logged as `ledger_unrecorded` and rebuilt from Workers Logs on the next healthy run (ADR-028) |
+| Dashboard | `/reliability/` (flag `DASHBOARD_MODE=on`): summary, "Collecting data · Day N of 30" banner until the first window completes (30 Oct 2026), live state with Degraded when the latest run failed, SLO cards, 30-day strip, speed, failures, incident desk, client path, server path (Ludo). When the ledger cannot be read it says why (capacity, with the reset time, or unavailable) and that missed readings are rebuilt |
 | Incident desk | 2 failed runs → `repository_dispatch` to the incident engine; owner `/commands` on GitHub Issues are the human gate; since 1 Oct 2026 every AI priority waits for `/approve` (ADR-021); the site reads the engine's public `feed.json` (refreshed by the scheduled job, so up to 10 min behind), showing each ticket's gate with the rule it ran under and the owner's latest `/note` (ADR-025) |
-| Pulse run | `/play/`: validated `POST /api/rum`, no IP, user agent or cookie; personal result at game over |
-| Ludo | `/ludo/` (ADR-026): one Durable Object per room over WebSockets; solo vs bots or up to four players on an invite link; names and room chat in any language, kept only in the room; server-measured SLIs `ludo_connect`, `ludo_action`, `ludo_rtt` (+ lobby, turn, game) on `/reliability/#ludo`. Linked from the homepage reliability item and `/play/`. Rooms batch telemetry to the ledger and append moves as rows (ADR-027; dev load test at 40 rooms: p99 240 to 80 ms). Games run to last place; any player can leave, and an empty room stops. Dev Worker `vikrantsingh-fyi-dev` (`wrangler deploy --env dev`) for trying branches |
+| Pulse run | `/play/` (a games page: Ludo and Pulse run cards, then the runner): validated `POST /api/rum`, no IP, user agent or cookie; personal result at game over |
+| Ludo | `/ludo/` (ADR-026): one Durable Object per room over WebSockets; solo vs bots or up to four players on an invite link; names and room chat in any language, kept only in the room; server-measured SLIs `ludo_connect`, `ludo_action`, `ludo_rtt` (+ lobby, turn, game) on `/reliability/#ludo`. Linked from the homepage reliability item and `/play/`. Rooms batch telemetry to the ledger and append moves as rows (ADR-027; dev load test at 40 rooms: p99 240 to 80 ms). Games run to last place; any player can leave, and an empty room stops. About 2 storage rows per move. When the free-tier allowance is used up it shows a "Ludo is napping" screen with the reset in the player's time and does not retry. Dev Worker `vikrantsingh-fyi-dev` (`wrangler deploy --env dev`) for trying branches |
 | Visit counter | Counting, hidden until 1,000 views (`VISITS_MODE=auto`) |
 | Brand | Favicon set and 1200×630 share image from `scripts/make-brand-assets.py` (reads the headline); `og:image` URL is versioned by the headline so caches never serve a stale card |
 
@@ -27,13 +27,17 @@ Last updated: 2 Oct 2026.
 - Live desk policy: the engine's live workflow runs with `TRIAGE_AUTO_APPLY=off`, so a confident Low still waits for `/approve` (engine test `test_live_desk_never_auto_applies_even_low`, ADR-021).
 - Desk records keep the rule they ran under (ADR-025): the one pre-ADR-021 ticket reads "auto-applied under the earlier low-risk rule"; the owner's latest `/note` shows on each ticket (issue #2 says game day 1's alert landed there).
 - Homepage copy: every figure traced to the résumé or the owner's confirmation before publishing (ADR-022).
+- Ludo (2 Oct 2026): 2,000 seeded games replay exactly and run to full placings; live tests of solo, four-player, rematch, leave (lobby, mid-game, solo stops the room), chat in 18 scripts, names; phone and desktop renders; dev load test at 40 rooms (p99 240 to 80 ms after ADR-027).
+- Free-tier incident (2 Oct 2026, self-inflicted): capacity messages verified live during the outage (Ludo napping screen, dashboard card, `/api/slo` 503 `capacity`); heartbeat stayed fresh and no incident opened. Record: `docs/incidents/2026-10-02-free-tier-writes.md`; public postmortem: `/notes/postmortem-free-tier-writes/`.
+- Ledger backfill (ADR-028): query API and parsing validated against real Workers Logs; dry run over the 2 Oct gap would restore 17 probe hits, 7 heartbeat runs and 29 page requests (to 18:55 UTC); capacity refusals are never replayed.
 
 ## Pending
 
 - Game day 2 (2 Oct 2026, `FAULT=github_5xx`, held until the outside monitor went Down, then restored and worked through the gate on incident #3): write its record in `docs/gamedays/` from the template, including whether the alert reached the owner.
 - Cloudflare CI token expiry is still `TODO` in `docs/runbook.md`.
-- Ledger gap on 2 Oct 2026 (17:36 UTC to the 00:00 UTC reset, free-tier writes exhausted): seeded as an `events` gap in KV `ledger:gap`; the backfill (ADR-028) replays it from Workers Logs after the reset. Check that `ledger:gap` is gone and `op = ledger_backfill` lines report what was restored.
-- Cloudflare account is on the Free plan: the daily Durable Object limit is shared by production and the dev Worker, so heavy tests on dev can affect the live site. No load tests beyond ~40 rooms until a paid plan.
+- **Backfill result for 2 Oct:** the gap (17:36 UTC to the 00:00 UTC reset) is seeded in KV `ledger:gap`; after the reset it replays one 30-minute slice per run (about 13 runs). Confirm the key is gone and `op = ledger_backfill` lines report what was restored, then mark finding 7 in the postmortem and its raw record as done.
+- Cloudflare account is on the Free plan: the daily Durable Object allowances (100,000 rows written) are shared by production and the dev Worker, so heavy tests on dev can take live storage down (it happened on 2 Oct). No load tests beyond ~40 rooms until a separate account or a paid plan (incident finding 2).
+- A quiet, non-paging notice when the ledger refuses writes (incident finding 4).
 - Alert channel: the alert mailbox is near capacity (game day 1, finding 7; owner: site owner).
 - See [`ROADMAP.md`](ROADMAP.md) → Next.
 

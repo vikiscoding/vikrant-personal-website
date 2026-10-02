@@ -1,0 +1,132 @@
+---
+// Public postmortem for the 2 Oct 2026 free-tier exhaustion. Prose is the owner's; facts trace to
+// docs/incidents/2026-10-02-free-tier-writes.md. Blameless; self-inflicted, and said so. The backfill result is
+// marked pending until it has run (no claim ahead of evidence).
+import Base from "../../layouts/Base.astro";
+---
+
+<Base
+  title="Postmortem: a load test used up the day's database writes · vikrantsingh.fyi"
+  description="My own load test used up this site's daily free-tier database writes. Nothing visitors needed broke, nothing raised a false alarm, and the missed records are rebuilt from logs."
+>
+  <p class="kicker"><time datetime="2026-10-02">2 October 2026</time> · Real incident, self-inflicted</p>
+  <h1>Postmortem: a load test used up the day's database writes</h1>
+
+  <h2>Summary</h2>
+  <p>
+    I load-tested the multiplayer game on a separate test copy of this site. The test copy shares the account's daily
+    allowance of database writes with the live site, and an hour later that allowance ran out. For six and a half hours
+    the live reliability page couldn't show its numbers, new games couldn't start, and the site's own records missed
+    their readings. Pages, the heartbeat and the outside monitor were fine, and nothing raised a false alarm.
+  </p>
+  <p>
+    The worst part wasn't the outage. It was the page saying "the live numbers appear here once 30 days of data exist",
+    which looked like a choice rather than a failure. Six minutes after the cause was found, it said what was
+    actually wrong. Within two hours, every place that depends on that storage explained itself and said when it would
+    be back, the game wrote a third as much per move, and missed readings had a way back.
+  </p>
+
+  <dl class="facts">
+    <div><dt>Cause</dt><dd>Two load tests and the runs after them used up the daily 100,000 database writes on Cloudflare's free tier, shared by the test and live copies</dd></div>
+    <div><dt>User impact</dt><dd>Live reliability numbers and new Ludo games unavailable for 6 h 24 min. Every page served</dd></div>
+    <div><dt>Time to detect</dt><dd>Minutes, by eye. No signal raised it (finding 4)</dd></div>
+    <div><dt>Time to explain</dt><dd>6 minutes after the cause was confirmed: the page said what was wrong</dd></div>
+    <div><dt>Time to restore</dt><dd>The daily reset at 8:00 p.m.; the free tier has no earlier way back</dd></div>
+    <div><dt>Error budget used</dt><dd>None. The outside probe's checks all passed; the heartbeat never failed</dd></div>
+    <div><dt>Data</dt><dd>Missed readings rebuilt from logs after the reset (result pending)</dd></div>
+  </dl>
+
+  <h2>Timeline</h2>
+  <p class="muted small">Toronto time (EDT), 2 October.</p>
+  <table>
+    <tbody>
+      <tr><th scope="row">12:21 p.m.</th><td>Load test on the test copy: 40 games of four players for a minute, about 11,600 moves</td></tr>
+      <tr><th scope="row">12:30</th><td>Second load test after a scaling change; then a round of regression games</td></tr>
+      <tr><th scope="row">1:10</th><td>The scaling change ships. Each move now writes about six database rows (finding 3)</td></tr>
+      <tr><th scope="row">1:36</th><td><strong>The day's allowance runs out.</strong> Every database write on the account is refused</td></tr>
+      <tr><th scope="row">1:36</th><td>The reliability page falls back to "numbers appear once 30 days exist" (finding 5)</td></tr>
+      <tr><th scope="row">~1:40</th><td>I notice the page is wrong and ask why</td></tr>
+      <tr><th scope="row">1:42</th><td>The cause is in the logs word for word: "Exceeded allowed rows written … free tier"</td></tr>
+      <tr><th scope="row">1:48</th><td>The page now says the numbers are temporarily unavailable, and that the site itself is fine</td></tr>
+      <tr><th scope="row">2:09</th><td>Every affected place names the cause and the reset time; the game cuts its writes to about two per move</td></tr>
+      <tr><th scope="row">2:58</th><td>Rebuilding missed readings from logs becomes a standing rule; today's gap is queued</td></tr>
+      <tr><th scope="row">8:00 p.m.</th><td>The allowance resets; the rebuild runs, half an hour of readings at a time</td></tr>
+    </tbody>
+  </table>
+
+  <h2>What went well</h2>
+  <ul>
+    <li>Degrade open held. Every page served, and the heartbeat and the outside monitor never noticed.</li>
+    <li>No false alarm. Nothing that can raise an incident depends on this storage, by design.</li>
+    <li>The cause was in the logs verbatim, so diagnosis took minutes, not guesses.</li>
+    <li>Nothing was really lost. Every reading is also written to the logs, which live somewhere else.</li>
+  </ul>
+
+  <h2>What hurt</h2>
+  <p>
+    I checked the wrong limit. Before the second test I looked at the daily request allowance and had room. The one that
+    ran out was rows written, which is smaller in practice. A test plan should name the resource it might exhaust, and
+    this one named the wrong one.
+  </p>
+  <p>
+    The test copy wasn't as separate as it looked. It had its own address, its own storage and no access to the live
+    data, but it drew on the same account-wide allowance. Isolation that stops at the account boundary isn't isolation
+    for capacity.
+  </p>
+  <p>
+    The scaling change made this worse. It removed a real bottleneck, every move queuing on one shared ledger, and
+    cut the slowest 1% of moves from 240 to 80 ms. But it did so by writing more rows per move, and on this plan rows written are the scarce
+    resource. It was optimised for the wrong constraint. Each move now writes one record and one small log row, a third
+    of before.
+  </p>
+  <p>
+    And the failure looked like a decision. "The live numbers appear here once 30 days of data exist" is a sensible
+    message for a flag that's off and a misleading one for storage that's refusing writes. A page that can't say why it's
+    empty will be read as hiding something.
+  </p>
+
+  <h2>Findings and actions</h2>
+  <div class="scroll"><table class="findings">
+    <thead><tr><th scope="col">#</th><th scope="col">Finding</th><th scope="col">Action</th><th scope="col">Status</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>The test plan checked request limits, not rows written</td><td>Capacity budget named in every test plan; no large load tests on the free tier</td><td>Done</td></tr>
+      <tr><td>2</td><td>Test and live copies share account-wide allowances</td><td>Separate account or a paid plan before the next load test</td><td>Open (me)</td></tr>
+      <tr><td>3</td><td>A scaling change raised writes per move from about 4 to 6</td><td>One record plus one log row per move, about 2</td><td>Fixed</td></tr>
+      <tr><td>4</td><td>Detected by eye; nothing signalled the refused writes</td><td>The heartbeat notices refused writes and queues a rebuild (never a page)</td><td>Fixed; a quiet notice is open</td></tr>
+      <tr><td>5</td><td>The empty page looked like a choice</td><td>Every affected place names the cause and the reset time</td><td>Fixed</td></tr>
+      <tr><td>6</td><td>The game failed as a dead connection</td><td>A "Ludo is napping" screen with the reset in your own time</td><td>Fixed</td></tr>
+      <tr><td>7</td><td>Six and a half hours of readings missed</td><td>Rebuilt from logs after any outage, automatically, marked as backfilled</td><td>Fixed; today's result pending</td></tr>
+    </tbody>
+  </table></div>
+
+  <h2>The rule that came out of it</h2>
+  <p>
+    The fixes that matter most are the ones that change what happens next time. When this site's records can't be
+    written, for any reason, each missed reading is logged in full. The heartbeat notices the refusal, and on the first
+    healthy run afterwards the missed readings are rebuilt from the logs, marked as backfilled so the record stays
+    honest. Running out of a budget is never treated as an incident, and never hidden either.
+  </p>
+
+  <p class="more">
+    <a href="/reliability/">Live reliability</a> · <a href="https://github.com/vikiscoding/vikrant-personal-website/blob/main/docs/incidents/2026-10-02-free-tier-writes.md">The raw record</a> · <a href="/notes/postmortem-game-day-1/">Postmortem: game day 1</a> · <a href="/notes/how-this-site-is-run/">How this site is run</a>
+  </p>
+</Base>
+
+<style>
+  .kicker { color: var(--muted); font-size: 0.875rem; margin: 0 0 0.5rem; }
+  h2 { font-size: 1.125rem; margin: 2.25rem 0 0.5rem; }
+  .small { font-size: 0.875rem; }
+  .facts { display: grid; gap: 0.35rem 1.5rem; grid-template-columns: max-content 1fr; margin: 1.25rem 0 0; font-size: 0.9375rem; }
+  .facts div { display: contents; }
+  .facts dt { color: var(--muted); }
+  .facts dd { margin: 0; }
+  @media (max-width: 480px) { .facts { grid-template-columns: 1fr; } .facts dd { margin-bottom: 0.4rem; } }
+  table { width: 100%; border-collapse: collapse; font-size: 0.9375rem; }
+  th, td { text-align: left; vertical-align: top; padding: 0.4rem 0.5rem; border-bottom: 1px solid var(--line); }
+  tbody th { color: var(--muted); font-weight: 500; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .findings thead th { color: var(--muted); font-weight: 500; }
+  .findings td:last-child { white-space: nowrap; }
+  .more { margin-top: 2rem; font-size: 0.9375rem; }
+  .scroll { overflow-x: auto; }
+  .findings { min-width: 34rem; }
+</style>

@@ -99,12 +99,12 @@ export const profile = {
     {
       title: "This site's reliability",
       chip: "Live",
-      text: "Two service level objectives with live error budgets; an outside probe checks the site every five minutes. Two small games feed it real traffic: a 30-second runner measures what the browser experiences, and a multiplayer Ludo game measures how long every move takes on the server. I broke the site on purpose and published the postmortem: eight findings, each with an action and a status.",
+      text: "Two service level objectives with live error budgets; an outside probe checks the site every five minutes. Two small games feed it real traffic: a 30-second runner measures what the browser experiences, and a multiplayer Ludo game measures how long every move takes on the server. I break it on purpose and publish what I find, and when a load test of my own took part of it down, I wrote that up too.",
       links: [
         { label: "Live reliability", href: "/reliability/" },
-        { label: "Postmortem", href: "/notes/postmortem-game-day-1/" },
-        { label: "Play Ludo", href: "/ludo/" },
-        { label: "Play Pulse run", href: "/play/" },
+        { label: "Postmortem: game day", href: "/notes/postmortem-game-day-1/" },
+        { label: "Postmortem: real incident", href: "/notes/postmortem-free-tier-writes/" },
+        { label: "Play the games", href: "/play/" },
       ],
     },
     {

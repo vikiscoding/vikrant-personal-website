@@ -19,12 +19,14 @@ The owner's personal site (headline, proof items, résumé, contact) plus a smal
 | `worker/ledger.ts`, `worker/slo.ts` | SLI ledger (Durable Object) and the SLO window |
 | `worker/dashboard.ts` | Server-rendered `/reliability/` |
 | `worker/incidents.ts` | Incident desk: dispatch to the engine, read its feed |
-| `worker/rum.ts` | Pulse run telemetry endpoint (the only public write path) |
+| `worker/rum.ts` | Pulse run telemetry endpoint (a public write path, with `/api/ludo`) |
 | `worker/log.ts` | The one log/SLI event shape (`docs/log-schema.md`) |
 | `worker/faults.ts` | Deploy-time game-day switch |
+| `worker/capacity.ts` | Free-tier capacity: detect refusals, the next reset time (pages say so plainly; never an incident) |
+| `worker/backfill.ts`, `worker/backfill-parse.ts` | Ledger backfill from Workers Logs after an outage (ADR-028); the parser is pure and unit-testable |
 | `worker/ludo/`, `src/pages/ludo.astro` | Ludo, the server-path latency testbed (ADR-026): `engine.ts` (pure, seeded rules), `room.ts` (one Durable Object per room), `route.ts` (WebSocket upgrade), `telemetry.ts` (event schema). Doc: `docs/ludo-telemetry.md` |
 | `scripts/` | Brand-asset generator |
-| `docs/` | Status, roadmap, ADRs, SLOs, runbook, game days, templates |
+| `docs/` | Status, roadmap, ADRs, SLOs, runbook, game days, incidents, templates |
 
 ## Rules
 
@@ -39,7 +41,9 @@ The owner's personal site (headline, proof items, résumé, contact) plus a smal
 - **Writing lists and links; it never republishes.** Titles and dates come from the Medium feed, and claims are the post's own words.
 - **No claim ahead of evidence.** "Owns the pager" waits for a full 30-day SLO window; no film link until the film is published; the incident agent's suggestions are always "proposed, not applied"; never break or test Balance-Books or any live business site on purpose (ADR-008).
 - **No personal data in logs**: no IP, email, body, headers or tokens.
-- **Degrade open.** Nothing dynamic may fail a page. Only `/api/pulse` may return 5xx on purpose.
+- **Degrade open.** Nothing dynamic may fail a page. Only `/api/pulse` may return 5xx on purpose, and `/api/slo` when its records cannot be read (503 with the cause).
+- **Capacity is not an incident.** Running out of a free-tier allowance is said plainly where it shows (cause and reset time), never paged, never counted against an objective; missed SLI records are rebuilt from logs (ADR-028).
+- **Load tests name the resource they might exhaust,** and never run against shared account allowances that production depends on (incident of 2 Oct 2026).
 - **Faults are deploy-time only.** Never add a request-time fault toggle to the site Worker.
 - No LLM features on the site. No new deploy units, vendors or shared packages without an ADR.
 - `main` is production; the CI build must pass; secrets only in Cloudflare and GitHub secrets, set in their dashboards.

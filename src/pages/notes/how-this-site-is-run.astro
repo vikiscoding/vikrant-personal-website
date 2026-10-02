@@ -18,6 +18,8 @@ import Base from "../../layouts/Base.astro";
     <li>Two small games add real traffic: <a href="/play/">Pulse run</a> reports what the browser experiences, and
       <a href="/ludo/">Ludo</a> times every roll and move on the server, with its own objectives on the dashboard.</li>
     <li>I break it on purpose, restore it, and write down what I learned. <a href="/notes/postmortem-game-day-1/">Postmortem: game day 1</a> (1 October 2026).</li>
+    <li>When something breaks that I didn't plan, it gets the same treatment. <a href="/notes/postmortem-free-tier-writes/">Postmortem: a load test used up the day's database writes</a> (2 October 2026).</li>
+    <li>If the site's own records can't be written, nothing pages anyone and nothing is lost: every reading is also logged, and missed readings are rebuilt from the logs on the next healthy run.</li>
   </ul>
   <p>Status: the heartbeat and the external probe have been running since 30 September 2026. The first 30-day SLO numbers come after that window closes.</p>
   <p><a href="/reliability/">See the live reliability dashboard →</a></p>
@@ -32,6 +34,7 @@ import Base from "../../layouts/Base.astro";
     <li><a href="https://github.com/vikiscoding/vikrant-personal-website">This site's code</a> (Astro, TypeScript, Cloudflare Workers)</li>
     <li><a href="https://github.com/vikiscoding/vikrant-personal-website/blob/main/docs/adr/README.md">Decision records</a>, each with the option it rejected</li>
     <li><a href="https://github.com/vikiscoding/vikrant-personal-website/blob/main/docs/gamedays/2026-10-01-github_5xx.md">Game day 1, the raw record</a> behind the <a href="/notes/postmortem-game-day-1/">postmortem</a></li>
+    <li><a href="https://github.com/vikiscoding/vikrant-personal-website/blob/main/docs/incidents/2026-10-02-free-tier-writes.md">The 2 October incident, the raw record</a> behind its <a href="/notes/postmortem-free-tier-writes/">postmortem</a></li>
     <li><a href="https://github.com/vikiscoding/vikrant_perswebsite_incidents_aiengine">The incident engine's code</a> (Python, GitHub Actions)</li>
   </ul>
 </Base>

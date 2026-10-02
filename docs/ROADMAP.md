@@ -21,9 +21,13 @@ Engineering roadmap for vikrantsingh.fyi. Decisions are in [`docs/adr/`](adr/REA
 | Nav item **Play**, last (ADR-024) | 1 Oct 2026 |
 | Incident desk: the AI-priority rule is dated; the old ticket shows the rule it ran under; the owner's latest note shows on each ticket (ADR-025) | 1 Oct 2026 |
 | Ludo: server-path latency testbed with server-measured SLIs, bots, invite links, room chat in any language, full screen on phones (ADR-026) | 2 Oct 2026 |
+| Ludo scale: per-room telemetry batches, append-only moves, ~2 rows per move; play to last place; leave any time (ADR-027) | 2 Oct 2026 |
+| Free-tier incident: capacity-aware pages, collecting-data banner, public postmortem; ledger backfill from logs as a standing rule (ADR-028) | 2 Oct 2026 |
 
 ## Next
 
+- [ ] **Confirm the 2 Oct backfill** after the reset, and close finding 7 in the postmortem.
+- [ ] **Isolate load testing from production capacity** (incident finding 2): a separate Cloudflare account for the dev Worker, or a paid plan, before any load test above ~40 rooms.
 - [ ] **First 30-day SLO report, 30 Oct 2026.** Save the outside probe's 30-day uptime (SLO-1) and the ledger's scheduled-job success (SLO-2). Consider switching `DASHBOARD_MODE` to `auto`.
 - [ ] **Game day 2: fire the alert on purpose, recorded.** *Run 2 Oct 2026; record pending in `docs/gamedays/`.* Hold the fault until the outside monitor goes Down and alerts (about 40–45 min after the last good run), restore, then work the incident through the human gate. Proves the probe → alert → delivery path end to end (game day 1, finding 8). Prerequisite: the alert channel has space (finding 7).
 - [ ] **Pulse run break and restore.** After a few quiet days: deploy `FAULT=game_js_error`, watch the client-path block react, restore, and write it up.
