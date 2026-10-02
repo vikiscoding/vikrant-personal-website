@@ -3,6 +3,7 @@
 import type { Env } from "./env";
 import { activeFault } from "./faults";
 import { reconcileLedger } from "./backfill";
+import { saveSloCopy } from "./slo";
 import { DepError, recordAwait } from "./log";
 import { incidentSignal, refreshFeed } from "./incidents";
 
@@ -83,6 +84,10 @@ export async function runTicker(env: Env, ctx?: ExecutionContext): Promise<void>
     await incidentSignal(env, true, "", fault); // after the SLI is recorded, so the desk never skews it
     await refreshFeed(env);
     await reconcileLedger(env, ledger); // a ledger outage is never an incident: only noted here, and backfilled later
+    if (ledger === "ok") {
+      // Keep the read copy fresh while the ledger is healthy; it is what the dashboard shows if the ledger cannot be read.
+      await saveSloCopy(env).catch((e) => console.error(JSON.stringify({ v: 1, ts: new Date().toISOString(), op: "slo_copy", outcome: "error", detail: e instanceof Error ? e.message : "save failed" })));
+    }
   } catch (e) {
     const err = e instanceof DepError ? e : new DepError("github", String(e), 500);
     const ledger = await recordAwait(env, {

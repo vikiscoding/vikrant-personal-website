@@ -128,23 +128,31 @@ export class SliLedger extends DurableObject<Env> {
     super(ctx, env);
     ctx.blockConcurrencyWhile(async () => {
       const sql = this.ctx.storage.sql;
-      sql.exec(`CREATE TABLE IF NOT EXISTS daily (
-        day TEXT NOT NULL, source TEXT NOT NULL,
-        total INTEGER NOT NULL DEFAULT 0, good INTEGER NOT NULL DEFAULT 0, bad INTEGER NOT NULL DEFAULT 0,
-        slow_good INTEGER NOT NULL DEFAULT 0, overflow INTEGER NOT NULL DEFAULT 0, max_ms INTEGER NOT NULL DEFAULT 0,
-        ${hcols.map((c) => `${c} INTEGER NOT NULL DEFAULT 0`).join(", ")},
-        PRIMARY KEY (day, source))`);
-      sql.exec(`CREATE TABLE IF NOT EXISTS events (
-        ts TEXT NOT NULL, day TEXT NOT NULL, source TEXT NOT NULL, outcome TEXT NOT NULL,
-        status INTEGER NOT NULL, ms INTEGER NOT NULL, dep TEXT NOT NULL, detail TEXT NOT NULL, fault TEXT NOT NULL)`);
-      sql.exec(`CREATE INDEX IF NOT EXISTS events_day ON events (day, source)`);
-      // One row per game session (a random per-page-load ID). No IP, user agent or cookie.
-      sql.exec(`CREATE TABLE IF NOT EXISTS game_sessions (
-        day TEXT NOT NULL, session TEXT NOT NULL,
-        started INTEGER NOT NULL DEFAULT 0, finished INTEGER NOT NULL DEFAULT 0,
-        errored INTEGER NOT NULL DEFAULT 0, janky INTEGER NOT NULL DEFAULT 0,
-        best_score INTEGER NOT NULL DEFAULT 0,
-        PRIMARY KEY (day, session))`);
+      // Create only what is missing, and never let a refused create throw out of start-up. (Note: once the free tier's
+      // daily writes are used up, Cloudflare refuses EVERY query on this storage, reads included, as verified on 2 Oct
+      // 2026; that is why the dashboard keeps a read copy in KV, worker/slo.ts saveSnapshot.)
+      const have = new Set(sql.exec<{ name: string }>(`SELECT name FROM sqlite_master WHERE type IN ('table', 'index')`).toArray().map((r) => r.name));
+      if (have.has("daily") && have.has("events") && have.has("events_day") && have.has("game_sessions")) return;
+      try {
+        sql.exec(`CREATE TABLE IF NOT EXISTS daily (
+          day TEXT NOT NULL, source TEXT NOT NULL,
+          total INTEGER NOT NULL DEFAULT 0, good INTEGER NOT NULL DEFAULT 0, bad INTEGER NOT NULL DEFAULT 0,
+          slow_good INTEGER NOT NULL DEFAULT 0, overflow INTEGER NOT NULL DEFAULT 0, max_ms INTEGER NOT NULL DEFAULT 0,
+          ${hcols.map((c) => `${c} INTEGER NOT NULL DEFAULT 0`).join(", ")},
+          PRIMARY KEY (day, source))`);
+        sql.exec(`CREATE TABLE IF NOT EXISTS events (
+          ts TEXT NOT NULL, day TEXT NOT NULL, source TEXT NOT NULL, outcome TEXT NOT NULL,
+          status INTEGER NOT NULL, ms INTEGER NOT NULL, dep TEXT NOT NULL, detail TEXT NOT NULL, fault TEXT NOT NULL)`);
+        sql.exec(`CREATE INDEX IF NOT EXISTS events_day ON events (day, source)`);
+        // One row per game session (a random per-page-load ID). No IP, user agent or cookie.
+        sql.exec(`CREATE TABLE IF NOT EXISTS game_sessions (
+          day TEXT NOT NULL, session TEXT NOT NULL,
+          started INTEGER NOT NULL DEFAULT 0, finished INTEGER NOT NULL DEFAULT 0,
+          errored INTEGER NOT NULL DEFAULT 0, janky INTEGER NOT NULL DEFAULT 0,
+          best_score INTEGER NOT NULL DEFAULT 0,
+          PRIMARY KEY (day, session))`)      } catch (e) {
+        console.error(JSON.stringify({ v: 1, ts: new Date().toISOString(), op: "ledger", outcome: "error", detail: `schema setup refused: ${e instanceof Error ? e.message : "unknown"}`.slice(0, 200) }));
+      }
     });
   }
 

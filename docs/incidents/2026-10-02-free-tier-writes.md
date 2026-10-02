@@ -29,6 +29,8 @@ Raw record for the postmortem (template: `docs/templates/postmortem.md`; public 
 | 18:09 | Capacity-aware messages (Ludo "napping" screen, dashboard card, `/api/slo` 503 with `Retry-After`); Ludo cut to ~2 rows per move | commit `5a2d6ce` |
 | 18:58 | Backfill as a standing rule (ADR-028); "Nothing is lost" wording | commit `881da93` |
 | ~19:05 | Today's gap seeded: `ledger:gap` = 17:36:19.792 to 00:00, mode `events` | KV |
+| 19:35 | Checked on the dev Worker: with writes exhausted, even `SELECT 1` and a read of `sqlite_master` are refused ("Exceeded allowed rows written"); reads are not possible | dev Workers Logs (`DIAG` lines) |
+| 19:45 | Read copy of the 30-day window in KV (`slo:last`), refreshed by every healthy run; dashboard and `/api/slo` fall back to it with "Recording paused since…" (ADR-029). Verified locally with `FAULT=ledger_read_fail` | branch `ledger-read-during-capacity` |
 | 00:00 (3 Oct) | Allowance resets; backfill replays the gap from Workers Logs, a slice per run | **Pending: result to be added** |
 
 Time to detect: minutes, by a person, not by a signal (finding 4). Time to mitigate the user-facing confusion: 6 min after confirmation (17:42 to 17:48). Time to restore: the 00:00 UTC reset (no earlier restore exists on the Free plan).
@@ -51,6 +53,7 @@ Time to detect: minutes, by a person, not by a signal (finding 4). Time to mitig
 | 5 | The failure was misleading: the fallback said numbers "appear once 30 days exist" | Honest cards that name the cause and the reset time | Fixed (`2ce05cd`, `5a2d6ce`) |
 | 6 | Ludo failed as a dead connection | "Ludo is napping" screen with the reset in the player's time; no retries until then | Fixed (`5a2d6ce`) |
 | 7 | The ledger missed 6 h 24 min of records | Backfill from Workers Logs as a standing rule (ADR-028); today's gap seeded | Fixed; today's replay pending |
+| 8 | The dashboard went dark although only writes were refused; testing showed Cloudflare refuses reads too once the write allowance is used up | Read copy of the window in KV, shown labelled when the ledger cannot be read (ADR-029) | Fixed |
 
 ## Open
 

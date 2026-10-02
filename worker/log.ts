@@ -2,6 +2,7 @@
 // Written to places that do not share a failure domain with KV: Workers Logs (console),
 // the SLI ledger Durable Object (ADR-012) and, when enabled, Analytics Engine. Never logs IPs, emails or bodies.
 import type { Env } from "./env";
+import { isCapacity } from "./capacity";
 import { ledgerSource, type LedgerEntry } from "./ledger";
 
 export type Outcome = "ok" | "degraded" | "error";
@@ -61,7 +62,7 @@ export function logUnrecorded(entries: LedgerEntry[], e: unknown): void {
  * Like `record`, but waits for the ledger write and says whether it landed. The scheduled job uses it once per run:
  * that answer is how a ledger outage is noticed (and later backfilled). Never throws.
  */
-export async function recordAwait(env: Env, ev: SliEvent): Promise<"ok" | "failed" | "none"> {
+export async function recordAwait(env: Env, ev: SliEvent): Promise<"ok" | "failed" | "capacity" | "none"> {
   const ts = new Date().toISOString();
   record(env, ev);
   const entry = ledgerEntry(ev, ts);
@@ -71,7 +72,7 @@ export async function recordAwait(env: Env, ev: SliEvent): Promise<"ok" | "faile
     return "ok";
   } catch (e) {
     logUnrecorded([entry], e);
-    return "failed";
+    return isCapacity(e) ? "capacity" : "failed";
   }
 }
 

@@ -13,6 +13,7 @@
 //   backfill uses exact field filters (op = ledger_unrecorded) or reads every event in a slice, never a text search.
 // Needs CF_ACCOUNT_ID (var) and CF_OBSERVABILITY_TOKEN (secret, Workers Observability permission). Without them the gap
 // stays open and waits. Never throws; never raises an incident.
+import { nextReset } from "./capacity";
 import type { Env } from "./env";
 import { findRecord, toEntry, type BackfillEntry } from "./backfill-parse";
 import { ledgerSource, type LedgerEntry } from "./ledger";
@@ -32,6 +33,10 @@ export interface Gap {
   /** End of the gap, when known (mode "events"); otherwise up to the run that closes it. */
   to?: number;
   mode: "unrecorded" | "events";
+  /** Why recording stopped, for the dashboard's banner. */
+  cause?: "capacity" | "outage";
+  /** Capacity: when the allowance resets and writes resume (epoch ms). */
+  resumeAt?: number;
   /** Slice length in ms; halved when a slice hits the query limit. */
   step?: number;
   /** Entries restored so far. */
@@ -42,16 +47,31 @@ export interface Gap {
 const log = (outcome: "ok" | "degraded" | "error", detail: string) =>
   console.log(JSON.stringify({ v: 1, ts: new Date().toISOString(), op: "ledger_backfill", outcome, detail: detail.slice(0, 200) }));
 
+/** The open gap, if any: the dashboard and /api/slo use it to say recording is paused, or catching up. Never throws. */
+export async function readGap(env: Env): Promise<Gap | null> {
+  try {
+    return env.PULSE ? await env.PULSE.get<Gap>(GAP_KEY, "json") : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Called once per scheduled run with whether that run's own ledger write landed. Never throws. */
-export async function reconcileLedger(env: Env, ledger: "ok" | "failed" | "none"): Promise<void> {
+export async function reconcileLedger(env: Env, ledger: "ok" | "failed" | "capacity" | "none"): Promise<void> {
   if (!env.PULSE || ledger === "none") return;
   try {
     const gap = await env.PULSE.get<Gap>(GAP_KEY, "json");
-    if (ledger === "failed") {
+    if (ledger === "failed" || ledger === "capacity") {
       if (!gap) {
         // Other writes may have failed a little before this run noticed: start 20 minutes back. Only events that were
         // actually refused are logged as unrecorded, so the margin cannot double-count.
-        const g: Gap = { from: Date.now() - 20 * 60_000, mode: "unrecorded", opened: new Date().toISOString() };
+        const g: Gap = {
+          from: Date.now() - 20 * 60_000,
+          mode: "unrecorded",
+          cause: ledger === "capacity" ? "capacity" : "outage",
+          ...(ledger === "capacity" ? { resumeAt: nextReset() } : {}),
+          opened: new Date().toISOString(),
+        };
         await env.PULSE.put(GAP_KEY, JSON.stringify(g));
         log("degraded", "ledger writes refused; gap opened, will backfill from logs on restore");
       }

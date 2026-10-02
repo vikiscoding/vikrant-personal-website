@@ -52,8 +52,9 @@ Symptom: `/reliability/` says "Live numbers are paused until the daily allowance
 
 1. **Not an incident.** Pages, the heartbeat and the outside probe are unaffected; nothing pages. The allowances reset at 00:00 UTC.
 2. **Find the cause** before it happens again: what wrote so much? (2 Oct 2026: two load tests on the dev Worker, which shares the account's allowance.) See `docs/incidents/2026-10-02-free-tier-writes.md`.
-3. **Check the gap** is open (`npx wrangler kv key get --binding PULSE --remote ledger:gap`); the backfill below rebuilds the missed records after the reset.
-4. **Stop** any load test or bulk job on the dev Worker until the reset.
+3. **The records stay visible:** the dashboard shows the last saved copy (KV `slo:last`, refreshed every healthy run) with "Recording paused since…" (ADR-029).
+4. **Check the gap** is open (`npx wrangler kv key get --binding PULSE --remote ledger:gap`); the backfill below rebuilds the missed records after the reset.
+5. **Stop** any load test or bulk job on the dev Worker until the reset.
 
 ## Ledger outage and backfill (ADR-028)
 
@@ -77,6 +78,7 @@ Deploy a fault, observe, restore. Events carry `fault` so they can be excluded f
 | `github_slow` | Ticker times out at 5 s; same as above, slower | Timeouts and budgets |
 | `kv_read_fail` | Pages return 200 but degraded; `/api/pulse` 503 at once | Black-box vs. white-box, degrade open |
 | `kv_write_fail` | Ticker errors; pulse stale after 35 min | Write path failure |
+| `ledger_read_fail` | The ledger cannot be read: `/reliability/` renders from the KV read copy with "Recording paused since…"; `/api/slo` serves it with `from_copy: true` | Read copy and honest labelling (ADR-029) |
 | `game_js_error` | `/play/` throws on start; "Client path" error rate rises with `game day` tags; server SLOs unaffected | Client-path signal and blast radius (ADR-015) |
 
 ```sh

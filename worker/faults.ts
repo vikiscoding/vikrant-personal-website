@@ -3,7 +3,7 @@
 // There is no request-time toggle, so there is no public attack surface.
 import type { Env } from "./env";
 
-export const FAULTS = ["none", "github_5xx", "github_slow", "kv_read_fail", "kv_write_fail", "game_js_error", "ludo_slow"] as const;
+export const FAULTS = ["none", "github_5xx", "github_slow", "kv_read_fail", "kv_write_fail", "game_js_error", "ludo_slow", "ledger_read_fail"] as const;
 export type Fault = (typeof FAULTS)[number];
 
 export function activeFault(env: Env): Fault {

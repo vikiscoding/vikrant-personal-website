@@ -76,7 +76,7 @@ export const profile = {
   ],
   principles: {
     lead: "What I hold a team to.",
-    text: "Work isn't done without tests, monitoring, a way to roll back, and a named person who gets paged. Status means remaining work and risks, not percent complete. When something breaks at 3 a.m., I pick up.",
+    text: "Work isn't done without tests, monitoring, a way to roll back, and a named person who gets paged. Status means remaining work and risks, not percent complete. When something breaks at 3 a.m., I pick up. When something breaks, the people affected hear the truth first, and the fix changes what happens next time.",
   },
   aim: {
     lead: "What I'm building toward.",

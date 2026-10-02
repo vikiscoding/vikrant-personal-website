@@ -7,7 +7,7 @@ import Base from "../../layouts/Base.astro";
 
 <Base
   title="Postmortem: a load test used up the day's database writes · vikrantsingh.fyi"
-  description="My own load test used up this site's daily free-tier database writes. Nothing visitors needed broke, nothing raised a false alarm, and the missed records are rebuilt from logs."
+  description="My own load test used up this site's daily free-tier database writes. What broke, what didn't, the questions that drove the fixes, and the rule that came out of it."
 >
   <p class="kicker"><time datetime="2026-10-02">2 October 2026</time> · Real incident, self-inflicted</p>
   <h1>Postmortem: a load test used up the day's database writes</h1>
@@ -50,6 +50,8 @@ import Base from "../../layouts/Base.astro";
       <tr><th scope="row">1:48</th><td>The page now says the numbers are temporarily unavailable, and that the site itself is fine</td></tr>
       <tr><th scope="row">2:09</th><td>Every affected place names the cause and the reset time; the game cuts its writes to about two per move</td></tr>
       <tr><th scope="row">2:58</th><td>Rebuilding missed readings from logs becomes a standing rule; today's gap is queued</td></tr>
+      <tr><th scope="row">3:35</th><td>Checked: with writes refused, could the records at least be read? No. Even a bare read is refused (finding 8)</td></tr>
+      <tr><th scope="row">3:45</th><td>A read copy of the records now lives outside that storage; the page shows it, labelled "Recording paused since…"</td></tr>
       <tr><th scope="row">8:00 p.m.</th><td>The allowance resets; the rebuild runs, half an hour of readings at a time</td></tr>
     </tbody>
   </table>
@@ -96,8 +98,21 @@ import Base from "../../layouts/Base.astro";
       <tr><td>5</td><td>The empty page looked like a choice</td><td>Every affected place names the cause and the reset time</td><td>Fixed</td></tr>
       <tr><td>6</td><td>The game failed as a dead connection</td><td>A "Ludo is napping" screen with the reset in your own time</td><td>Fixed</td></tr>
       <tr><td>7</td><td>Six and a half hours of readings missed</td><td>Rebuilt from logs after any outage, automatically, marked as backfilled</td><td>Fixed; today's result pending</td></tr>
+      <tr><td>8</td><td>The page went dark although only writes were refused; it turned out reads are refused too</td><td>A read copy of the 30-day records, refreshed every 10 minutes, shown with "Recording paused since…" when the store can't be read</td><td>Fixed</td></tr>
     </tbody>
   </table></div>
+
+  <h2>How it was worked</h2>
+  <p>The fixes came from a handful of questions, asked in this order. Each one changed something.</p>
+  <ol class="questions">
+    <li><strong>Why is the page empty?</strong> It looked like a choice. The logs said otherwise, word for word, within minutes.</li>
+    <li><strong>What exactly ran out, and who shares it?</strong> Rows written, not requests; and the test copy shares the live site's allowance. (Findings 1 and 2.)</li>
+    <li><strong>Does this page anyone?</strong> It must not: a budget running out isn't an incident. I checked that nothing on the incident path depends on this storage, and watched the heartbeat stay green throughout.</li>
+    <li><strong>What do people see meanwhile?</strong> The cause and when it's back, everywhere it shows, instead of a blank or a dead connection. (Findings 5 and 6.)</li>
+    <li><strong>Is anything lost for good?</strong> No. Every reading is also in the logs, so missed ones are rebuilt, automatically, every time. (Finding 7.)</li>
+    <li><strong>If only writes are refused, why can't we still read?</strong> A fair question, so I tested it rather than assumed: reads are refused too. The records now have a copy that can always be read. (Finding 8.)</li>
+    <li><strong>What stops it happening this way again?</strong> A third of the writes per move, load tests that name the resource they could exhaust, and both written into the repo's rules. (Findings 1 and 3.)</li>
+  </ol>
 
   <h2>The rule that came out of it</h2>
   <p>
@@ -129,4 +144,5 @@ import Base from "../../layouts/Base.astro";
   .more { margin-top: 2rem; font-size: 0.9375rem; }
   .scroll { overflow-x: auto; }
   .findings { min-width: 34rem; }
+  .questions { padding-left: 1.3rem; display: grid; gap: 0.5rem; }
 </style>

@@ -6,6 +6,8 @@ import type { Pulse } from "./pulse";
 import { TARGETS, type SloWindow } from "./slo";
 import { addDays, localDay, localStamp } from "./time";
 import type { Feed, FeedIncident } from "./incidents";
+import type { Gap } from "./backfill";
+import { nextReset } from "./capacity";
 
 export type DashboardMode = "off" | "auto" | "on";
 export const WINDOW_DAYS = 30;
@@ -338,7 +340,7 @@ const longDay = (d: string) => `${Number(d.slice(8))} ${MONTHS.at(Number(d.slice
  * Shown until the first full 30-day window exists: the numbers below are real and live, but a few days of readings
  * are not yet a trend, so the page says how far along the window is and when the full picture forms.
  */
-function collecting(firstDay: string, now: number): string {
+function collecting(firstDay: string, now: number, paused = false): string {
   const today = localDay(new Date(now).toISOString());
   const elapsed = Math.round((Date.parse(today) - Date.parse(firstDay)) / 864e5) + 1;
   const day = Math.min(Math.max(elapsed, 1), WINDOW_DAYS);
@@ -347,7 +349,28 @@ function collecting(firstDay: string, now: number): string {
   return `<section class="dash-collecting" aria-label="Data collection in progress">
     <p class="dash-collecting-head"><span class="dash-chip">Collecting data</span> Day ${n(day)} of ${WINDOW_DAYS}</p>
     <div class="dash-progress" role="progressbar" aria-label="First 30-day window" aria-valuemin="0" aria-valuemax="${WINDOW_DAYS}" aria-valuenow="${day}"><span style="width:${pct}%"></span></div>
-    <p class="dash-small">Every number below is live and updates every few minutes. A few days of readings are not yet a trend, though: the objectives, error budgets and 30-day strip become meaningful once the first full window is in, on <strong>${esc(longDay(complete))}</strong>. Until then, read them as early readings.</p>
+    <p class="dash-small">${paused ? "Every number below is a real reading, up to the pause above." : "Every number below is live and updates every few minutes."} A few days of readings are not yet a trend, though: the objectives, error budgets and 30-day strip become meaningful once the first full window is in, on <strong>${esc(longDay(complete))}</strong>. Until then, read them as early readings.</p>
+  </section>`;
+}
+
+/**
+ * While the ledger's recording is interrupted (ADR-028): the figures below stop at a point, so say where, why, and that
+ * the missing readings come back on their own. Capacity before the reset = "paused"; afterwards = "catching up".
+ */
+function recordingBanner(gap: Gap | null, now: number, copy: { asOf: string; capacity: boolean } | null): string {
+  if (!gap && !copy) return "";
+  const since = localStamp(gap?.opened ?? copy!.asOf);
+  const resumeAt = gap?.resumeAt ?? (copy?.capacity ? nextReset(now) : null);
+  const paused = copy !== null || (gap?.cause === "capacity" && resumeAt !== null && now < resumeAt);
+  const head = paused ? `Recording paused since ${esc(since)}` : `Catching up on readings since ${esc(since)}`;
+  const shown = copy ? ` Showing the last saved copy of the records, from <strong>${esc(localStamp(copy.asOf))}</strong>.` : "";
+  const cause = copy && !copy.capacity ? "The record store can't be read right now, so" : "Today's free allowance of database writes is used up, so";
+  const body = paused
+    ? `${cause} the figures below stop there.${shown} Nothing is lost: readings since then are kept in the site's logs and are rebuilt automatically once writes resume${resumeAt ? ` at <strong>${esc(localStamp(new Date(resumeAt).toISOString()))}</strong>` : ""}.`
+    : `Recording was interrupted, and the readings since then are being rebuilt from the site's logs, half an hour at a time. The figures below fill in as that finishes; rebuilt readings are marked as backfilled.`;
+  return `<section class="dash-card" data-state="warn" aria-label="Recording status">
+    <h2>${head}</h2>
+    <p class="dash-small">${body} The site and its outside monitor are unaffected, and this never raises an incident.</p>
   </section>`;
 }
 
@@ -357,10 +380,12 @@ export function renderDashboard(
   feed: Feed | null = null,
   desk: { failures: number; lastDetail: string } | null = null,
   now = Date.now(),
+  gap: Gap | null = null,
+  copy: { asOf: string; capacity: boolean } | null = null,
 ): string {
   const firstDay = win.days[0]?.day;
   const daysWithData = new Set(win.days.map((d) => d.day)).size;
-  const young = firstDay && daysWithData < WINDOW_DAYS ? collecting(firstDay, now) : "";
+  const young = firstDay && daysWithData < WINDOW_DAYS ? collecting(firstDay, now, copy !== null) : "";
   // One-line summary (ADR-018): the answer before the evidence.
   const fresh = pulse?.state === "fresh";
   const failing = fresh && (desk?.failures ?? 0) > 0;
@@ -371,6 +396,7 @@ export function renderDashboard(
   } · data since ${esc(firstDay ?? "today")}</p>`;
   return `<div class="dash">
     ${summary}
+    ${recordingBanner(gap, now, copy)}
     ${young}
     ${liveCard(pulse, now, desk)}
     <div class="dash-grid">${sloCard(win, "pulse")}${sloCard(win, "ticker")}</div>
