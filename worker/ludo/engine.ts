@@ -4,6 +4,8 @@
 
 export const SEATS = 4;
 export const TOKENS = 4;
+/** Dice kept per seat for the on-screen history. */
+export const ROLL_HISTORY = 10;
 /** Progress: -1 in the yard, 0–50 on the shared track, 51–55 in the home column, 56 home. */
 export const HOME = 56;
 const TRACK = 52;
@@ -28,6 +30,8 @@ export interface Game {
   /** Token indexes the current seat may move with `die`. */
   legal: number[];
   winner: number | null;
+  /** Each seat's last ten dice, oldest first. Optional only so games saved before it existed still load. */
+  rolls?: number[][];
   /** Every applied action, in order: the replay record. */
   log: Action[];
 }
@@ -52,6 +56,7 @@ export function newGame(seed: number, seats: SeatKind[]): Game {
     die: null,
     legal: [],
     winner: null,
+    rolls: Array.from({ length: SEATS }, () => []),
     log: [],
   };
 }
@@ -90,8 +95,12 @@ export function apply(g: Game, a: Action): Game {
     const die = 1 + Math.floor(r * 6);
     const legal = legalMoves(g.tokens[a.seat] ?? [], die);
     const log = [...g.log, a];
-    if (legal.length === 0) return { ...g, rng, die, legal: [], phase: "roll", turn: nextSeat(g, a.seat), log };
-    return { ...g, rng, die, legal, phase: "move", log };
+    const rolls = Array.from({ length: SEATS }, (_, s) => {
+      const mine = g.rolls?.[s] ?? [];
+      return s === a.seat ? [...mine, die].slice(-ROLL_HISTORY) : mine;
+    });
+    if (legal.length === 0) return { ...g, rng, die, legal: [], rolls, phase: "roll", turn: nextSeat(g, a.seat), log };
+    return { ...g, rng, die, legal, rolls, phase: "move", log };
   }
 
   if (g.phase !== "move" || g.die === null) throw new Error("not_move_phase");

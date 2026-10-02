@@ -51,7 +51,7 @@ export async function readWindow(env: Env, windowDays: number): Promise<SloWindo
   return {
     generated_at: new Date().toISOString(),
     window_days: windowDays,
-    summary: (["pulse", "ticker", "page", "ludo_connect", "ludo_action", "ludo_rtt", "ludo_lobby", "ludo_game"] as const).map((s) => summarize(days, s)),
+    summary: (["pulse", "ticker", "page", "ludo_connect", "ludo_action", "ludo_rtt", "ludo_lobby", "ludo_game", "ludo_turn"] as const).map((s) => summarize(days, s)),
     days,
     events,
     game,

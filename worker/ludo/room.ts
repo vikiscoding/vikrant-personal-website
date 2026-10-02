@@ -6,6 +6,7 @@ import { DurableObject } from "cloudflare:workers";
 import type { Env } from "../env";
 import { activeFault } from "../faults";
 import { record, type SliEvent } from "../log";
+import { detail } from "./telemetry";
 import { apply, autoAction, newGame, SEATS, start, type Action, type Game, type SeatKind } from "./engine";
 
 /** Pacing and patience budgets (docs/ludo-telemetry.md). */
@@ -28,6 +29,8 @@ interface Meta {
   createdAt: number;
   startedAt: number | null;
   turnStartedAt: number;
+  /** When the current seat was last asked for input (state pushed): think time starts here. */
+  promptAt?: number;
   due: number | null;
   ended: boolean;
 }
@@ -67,6 +70,12 @@ function parse(raw: string | ArrayBuffer): Inbound | null {
     default:
       return null;
   }
+}
+
+/** The seat that threw the most recent die (the turn may already have passed on). */
+function lastRoller(g: Game): number | null {
+  for (let i = g.log.length - 1; i >= 0; i--) if (g.log[i]!.kind === "roll") return g.log[i]!.seat;
+  return null;
 }
 
 export class LudoRoom extends DurableObject<Env> {
@@ -138,9 +147,17 @@ export class LudoRoom extends DurableObject<Env> {
     this.game = start(this.game!);
     m.startedAt = now;
     m.turnStartedAt = now;
+    m.promptAt = now;
     if (m.mode === "code") {
       const wait = now - m.createdAt;
-      this.rec({ op: "ludo_lobby", outcome: wait <= LOBBY_GOOD_MS ? "ok" : "degraded", status: 200, ms: wait, detail: `humans=${this.game.seats.filter((k) => k === "human").length}` });
+      const seats = this.game.seats;
+      this.rec({
+        op: "ludo_lobby",
+        outcome: wait <= LOBBY_GOOD_MS ? "ok" : "degraded",
+        status: 200,
+        ms: wait,
+        detail: detail({ result: "started", humans: seats.filter((k) => k === "human").length, bots: seats.filter((k) => k === "bot").length }),
+      });
     }
   }
 
@@ -163,7 +180,10 @@ export class LudoRoom extends DurableObject<Env> {
     if (msg.t === "ping") return this.send(ws, { t: "probe", s: t0 });
     if (msg.t === "echo") {
       const rtt = t0 - msg.s;
-      if (rtt >= 0 && rtt <= 60_000) this.rec({ op: "ludo_rtt", outcome: rtt <= RTT_GOOD_MS ? "ok" : "degraded", status: 200, ms: rtt });
+      if (rtt >= 0 && rtt <= 60_000) {
+        await this.load();
+        this.rec({ op: "ludo_rtt", outcome: rtt <= RTT_GOOD_MS ? "ok" : "degraded", status: 200, ms: rtt, detail: detail({ mode: this.meta?.mode ?? "unknown" }) });
+      }
       return;
     }
 
@@ -178,12 +198,16 @@ export class LudoRoom extends DurableObject<Env> {
       this.begin(t0);
     } else {
       const action: Action = msg.t === "roll" ? { seat: att.seat, kind: "roll" } : { seat: att.seat, kind: "move", token: msg.token };
+      const think = g.turn === att.seat && m.promptAt ? t0 - m.promptAt : null;
       try {
         this.game = this.step(g, action);
       } catch (e) {
         // A rejected action is the player's mistake (or a stale screen), not a server failure: logged, not an SLI.
         console.log(JSON.stringify({ v: 1, ts: new Date().toISOString(), op: "ludo_invalid", detail: e instanceof Error ? e.message : "invalid" }));
         return this.send(ws, { t: "err", code: e instanceof Error ? e.message : "invalid" });
+      }
+      if (think !== null && think >= 0) {
+        this.rec({ op: "ludo_turn", outcome: "ok", status: 200, ms: think, detail: detail({ mode: m.mode, result: "acted", kind: msg.t }) });
       }
     }
 
@@ -197,7 +221,7 @@ export class LudoRoom extends DurableObject<Env> {
       outcome: ms <= ACTION_GOOD_MS ? "ok" : "degraded",
       status: 200,
       ms,
-      detail: `human ${msg.t}`,
+      detail: detail({ mode: m.mode, actor: "human", kind: msg.t }),
       fault: activeFault(this.env),
     });
   }
@@ -209,7 +233,9 @@ export class LudoRoom extends DurableObject<Env> {
     if (out.phase === "move" && out.legal.length === 1 && out.seats[out.turn] === "human") {
       out = apply(out, { seat: out.turn, kind: "move", token: out.legal[0]! });
     }
-    if (out.turn !== before || out.phase === "roll") this.meta!.turnStartedAt = Date.now();
+    const now = Date.now();
+    if (out.turn !== before || out.phase === "roll") this.meta!.turnStartedAt = now;
+    this.meta!.promptAt = now;
     if (out.phase === "over") this.finish(out);
     return out;
   }
@@ -219,7 +245,13 @@ export class LudoRoom extends DurableObject<Env> {
     if (m.ended) return;
     m.ended = true;
     const humans = g.seats.filter((k) => k === "human").length;
-    this.rec({ op: "ludo_game", outcome: "ok", status: 200, ms: Date.now() - (m.startedAt ?? m.createdAt), detail: `${m.mode} humans=${humans} winner=${g.seats[g.winner ?? 0]} actions=${g.log.length}` });
+    this.rec({
+      op: "ludo_game",
+      outcome: "ok",
+      status: 200,
+      ms: Date.now() - (m.startedAt ?? m.createdAt),
+      detail: detail({ mode: m.mode, result: "won", humans, winner: g.seats[g.winner ?? 0] ?? "unknown", actions: g.log.length }),
+    });
   }
 
   /** One alarm drives bots and turn timeouts. `due` is kept so alarm lateness is measured, not assumed. */
@@ -255,10 +287,10 @@ export class LudoRoom extends DurableObject<Env> {
     this.broadcast();
     const ms = Date.now() - t0 + lag;
     if (isBot) {
-      this.rec({ op: "ludo_action", outcome: ms <= BOT_LAG_GOOD_MS ? "ok" : "degraded", status: 200, ms, detail: `bot ${action.kind} lag=${lag}` });
+      this.rec({ op: "ludo_action", outcome: ms <= BOT_LAG_GOOD_MS ? "ok" : "degraded", status: 200, ms, detail: detail({ mode: m.mode, actor: "bot", kind: action.kind, lag }) });
     } else {
       // A human ran out of patience or left: an engagement signal, not a server fault.
-      console.log(JSON.stringify({ v: 1, ts: new Date().toISOString(), op: "ludo_timeout", detail: `${m.mode} seat=${action.seat}` }));
+      this.rec({ op: "ludo_turn", outcome: "degraded", status: 200, ms: HUMAN_TURN_MS, detail: detail({ mode: m.mode, result: "timeout", kind: action.kind }) });
     }
   }
 
@@ -270,10 +302,16 @@ export class LudoRoom extends DurableObject<Env> {
     if (!g || !m) return;
     if (this.ctx.getWebSockets().filter((s) => s !== ws).length > 0) return;
     if (g.phase === "lobby" && m.mode === "code") {
-      this.rec({ op: "ludo_lobby", outcome: "degraded", status: 200, ms: Date.now() - m.createdAt, detail: `abandoned humans=${g.seats.filter((k) => k === "human").length}` });
+      this.rec({ op: "ludo_lobby", outcome: "degraded", status: 200, ms: Date.now() - m.createdAt, detail: detail({ result: "abandoned", humans: g.seats.filter((k) => k === "human").length, bots: 0 }) });
     } else if (g.phase !== "over" && !m.ended) {
       m.ended = true;
-      this.rec({ op: "ludo_game", outcome: "degraded", status: 200, ms: Date.now() - (m.startedAt ?? m.createdAt), detail: `${m.mode} abandoned actions=${g.log.length}` });
+      this.rec({
+        op: "ludo_game",
+        outcome: "degraded",
+        status: 200,
+        ms: Date.now() - (m.startedAt ?? m.createdAt),
+        detail: detail({ mode: m.mode, result: "abandoned", humans: g.seats.filter((k) => k === "human").length, winner: "none", actions: g.log.length }),
+      });
     }
     m.due = null;
     await this.ctx.storage.deleteAlarm();
@@ -303,6 +341,8 @@ export class LudoRoom extends DurableObject<Env> {
       die: g.die,
       legal: g.legal,
       winner: g.winner,
+      rolls: g.rolls ?? [[], [], [], []],
+      lastRoller: lastRoller(g),
       moves: g.log.length,
       mode: m.mode,
       turnEndsAt: g.seats[g.turn] === "human" && g.phase !== "over" && g.phase !== "lobby" ? m.turnStartedAt + HUMAN_TURN_MS : null,

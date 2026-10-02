@@ -28,24 +28,32 @@ From response-time research (0.1 s feels instant, 1 s keeps flow, 10 s loses att
 | Lobby wait (code rooms) | ≤ 2 min | abandoned | Friends give up waiting |
 | Human turn | — | 30 s, then the server plays for you | Keeps three other people from waiting on one |
 
-## SLIs (all server-measured, in the SLI ledger)
+## Event schema
 
-| Ledger source | Event | Good when | Proposed target |
-| --- | --- | --- | --- |
-| `ludo_connect` | each upgrade attempt | room answered (101 or a correct 4xx) | 99.5% |
-| `ludo_action` | each human action; each bot step | human: receive → saved → broadcast ≤ 100 ms; bot: lateness + work ≤ 250 ms | 99% |
-| `ludo_rtt` | server probe every 15 s, echoed at once | ≤ 300 ms | 95% |
-| `ludo_lobby` | code room start or abandonment | started within 2 min | tracked |
-| `ludo_game` | game end | a winner (vs abandoned) | tracked |
+Every Ludo event is an ordinary SLI event (`docs/log-schema.md`): `v, ts, op, outcome, status, ms, detail, fault`. It goes to Workers Logs and to the SLI ledger (daily counts and a latency histogram per `op`; every non-good or slow event in full, capped at 500 per source per day). `detail` is space-separated `key=value` pairs, with a fixed key set per op, enforced at compile time by `worker/ludo/telemetry.ts`. Values are enums or integers: never names, IPs or seat keys.
 
-Logged only: `ludo_invalid` (rejected action), `ludo_timeout` (a human's turn auto-played). Read everything at `/api/slo?days=N`; Ludo events are kept off the site's Failures list.
+| op (ledger source) | Emitted | `ms` means | `outcome` ok when | `detail` keys | Proposed target |
+| --- | --- | --- | --- | --- | --- |
+| `ludo_connect` | each WebSocket upgrade, in the site Worker | time to the room's answer | 101, or a correct 4xx (full, busy) | `mode` solo/code · `result` open/full/busy/rejected/error · `reason`? | 99.5% |
+| `ludo_action` | each human action; each bot step | human: receive → saved → broadcast · bot: alarm lateness + work | human ≤ 100 ms · bot ≤ 250 ms | `mode` · `actor` human/bot · `kind` roll/move/start · `lag`? (bot) | 99% |
+| `ludo_rtt` | server probe every 15 s, echoed at once by the page | server-timed round trip | ≤ 300 ms | `mode` | 95% |
+| `ludo_turn` | each human action on their turn; each 30 s timeout | think time: prompt pushed → action received | the human acted (a timeout is "degraded") | `mode` · `result` acted/timeout · `kind` | tracked |
+| `ludo_lobby` | code room start, or the last player leaving the lobby | wait since the room was created | started within 2 min | `result` started/abandoned · `humans` · `bots` | tracked |
+| `ludo_game` | a winner, or the last player leaving mid-game | game duration | a winner | `mode` · `result` won/abandoned · `humans` · `winner` human/bot/none · `actions` | tracked |
+
+Logged only, not in the ledger: `ludo_invalid` (a rejected action: the player's mistake or a stale screen, never a server failure).
+
+**Where it shows:** `/reliability/#ludo` (Server path card: the three proposed objectives with worst-day p95, games finished, lobbies started, turns timed out and today's median think time) and `/api/slo?days=N` (`summary` and `days` rows for every `ludo_*` source). Ludo events are kept off the site's Failures list.
 
 **Game day:** deploy `FAULT=ludo_slow` (adds 400 ms to every human action) and watch `ludo_action` burn its budget; restore with `FAULT=none`.
+
+## What the player sees
+
+The die is a button (or press Space): it tumbles from the click until the server's number arrives (at least 350 ms, so it reads as a throw), then shows that face and keeps it until the next throw. Every roll anywhere tumbles the die in the roller's colour. Tickers show your last 10 rolls and each opponent's last 5; the history lives in the engine state, so every screen agrees and replays include it. Tokens sharing a square stack (same colour, with a count badge) or sit side by side (different colours).
 
 ## Telemetry not built yet
 
 - Client-perceived action time (send → board drawn) beaconed back. It is shown to the player now; sending it would be a second spoofable client signal, like Pulse run's.
 - Reconnect count and time-to-rejoin per seat.
 - Turn think time distribution (engagement, not reliability).
-- Dashboard cards on `/reliability/` for the three proposed SLOs.
 - Storage: the action log is rewritten on every step (≈ 50 KB by game end). Fine at this scale; move to append-only SQL rows if rooms get busy.

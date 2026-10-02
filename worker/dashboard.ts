@@ -23,6 +23,7 @@ const LUDO_EVENT_LABEL = {
   ludo_connect: "Ludo connect",
   ludo_lobby: "Ludo lobby",
   ludo_game: "Ludo game",
+  ludo_turn: "Ludo turn",
 } as const;
 const LABEL: Record<LedgerSource, string> = {
   pulse: "Heartbeat freshness",
@@ -35,6 +36,7 @@ const LABEL: Record<LedgerSource, string> = {
   ludo_connect: "Ludo connect",
   ludo_lobby: "Ludo lobby wait",
   ludo_game: "Ludo game",
+  ludo_turn: "Ludo turn",
 };
 const EVENT_LABEL: Record<LedgerSource, string> = { pulse: "Probe check", ticker: "Scheduled job", page: "Page", frame: "Pulse run frame", game: "Pulse run (browser)", ...LUDO_EVENT_LABEL };
 const EXPLAIN: Record<"pulse" | "ticker", string> = {
@@ -226,6 +228,52 @@ function clientPath(win: SloWindow): string {
   </section>`;
 }
 
+/** Ludo (docs/ludo-telemetry.md): server-measured interaction latency. Proposed objectives, plus tracked engagement. */
+function ludoSection(win: SloWindow): string {
+  const sum = (src: LedgerSource) => win.summary.find((x) => x.source === src);
+  const rows = (src: LedgerSource) => win.days.filter((d) => d.source === src);
+  const worstP95 = (src: LedgerSource) => {
+    const vals = rows(src).map((d) => d.p95_ms).filter((v): v is number => v !== null);
+    return vals.length ? Math.max(...vals) : null;
+  };
+  const share = (good: number, total: number) => (total ? pct(good / total) : "—");
+  const played = (sum("ludo_game")?.total ?? 0) + (sum("ludo_connect")?.total ?? 0);
+  if (!played) {
+    return `<section class="dash-card" data-state="none" id="ludo">
+    <h2>Server path (<a href="/ludo/">Ludo</a>)</h2>
+    <p>No games recorded yet. <a href="/ludo/">Play a game →</a></p>
+  </section>`;
+  }
+  const slo = (src: LedgerSource, label: string, good: string) => {
+    const x = sum(src);
+    const target = TARGETS[src];
+    const p95 = worstP95(src);
+    const state = !x || !x.total ? "none" : target !== undefined && x.good / x.total < target ? "bad" : "good";
+    return `<div data-state="${state}"><dt>${esc(label)}</dt><dd>${x && x.total ? share(x.good, x.total) : "—"}${
+      target !== undefined ? ` <span class="dash-muted">(objective ${pct(target)})</span>` : ""
+    }</dd><dd class="dash-small dash-muted">${esc(good)} · ${n(x?.total ?? 0)} checks${p95 === null ? "" : ` · p95 ≤ ${n(p95)} ms`}</dd></div>`;
+  };
+  const games = sum("ludo_game");
+  const lobby = sum("ludo_lobby");
+  const turns = sum("ludo_turn");
+  const thinkToday = rows("ludo_turn").at(-1)?.p50_ms ?? null;
+  return `<section class="dash-card" data-state="none" id="ludo">
+    <h2>Server path (<a href="/ludo/">Ludo</a>)</h2>
+    <p class="dash-small dash-muted">Every roll and move is decided and timed on the server, so these are measured, not reported by browsers. Objectives are proposed and not yet held for a full 30 days.</p>
+    <dl class="dash-facts dash-client">
+      ${slo("ludo_connect", "Connects answered", "room answered")}
+      ${slo("ludo_action", "Actions on time", "human ≤ 100 ms, bot ≤ 250 ms late")}
+      ${slo("ludo_rtt", "Round trips fast", "≤ 300 ms")}
+    </dl>
+    <dl class="dash-facts dash-client">
+      <div><dt>Games finished</dt><dd>${share(games?.good ?? 0, games?.total ?? 0)}</dd><dd class="dash-small dash-muted">${n(games?.good ?? 0)} of ${n(games?.total ?? 0)} reached a winner</dd></div>
+      <div><dt>Lobbies started</dt><dd>${share(lobby?.good ?? 0, lobby?.total ?? 0)}</dd><dd class="dash-small dash-muted">within 2 minutes · ${n(lobby?.total ?? 0)} code rooms</dd></div>
+      <div><dt>Turns timed out</dt><dd>${share(turns?.bad ?? 0, turns?.total ?? 0)}</dd><dd class="dash-small dash-muted">30 s without a move${thinkToday === null ? "" : ` · median think ≤ ${n(thinkToday)} ms today`}</dd></div>
+    </dl>
+    <p class="dash-small"><a href="/ludo/">Add a data point: play Ludo →</a> · <a href="/api/slo?days=30">raw data</a></p>
+  </section>`;
+}
+
 const OPEN = new Set(["DETECTED", "TRIAGING", "ACKNOWLEDGED", "ACTIVE"]);
 
 /** "service raised it → AI → human: ACKNOWLEDGED → ACTIVE → …": who did what, from the engine's own timeline. */
@@ -313,6 +361,7 @@ export function renderDashboard(
     ${failures(win.events)}
     ${incidentDesk(feed)}
     ${clientPath(win)}
+    ${ludoSection(win)}
     <section class="dash-section">
       <h2>How to read this</h2>
       <ul class="dash-small">

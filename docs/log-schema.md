@@ -28,3 +28,5 @@ Events with `op` in `ticker`, `pulse_api`, `page` are also written to the SLI le
 - `error`: the unit of work failed. For `pulse_api` that includes returning 503 because the snapshot is stale.
 
 Change the schema by bumping `v` and adding a row here in the same PR.
+
+Ludo events (`ludo_*`) use this same shape; their `detail` keys per op are fixed in `worker/ludo/telemetry.ts` and listed in [ludo-telemetry.md](ludo-telemetry.md).

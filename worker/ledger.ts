@@ -9,7 +9,7 @@ import { addDays, localDay } from "./time";
 
 /** Server sources (ticker, pulse, page), client frame samples (frame) and client game errors (game). */
 export type LedgerSource = ServerSource | "frame" | "game";
-type LudoSource = "ludo_action" | "ludo_rtt" | "ludo_connect" | "ludo_lobby" | "ludo_game";
+type LudoSource = "ludo_action" | "ludo_rtt" | "ludo_connect" | "ludo_lobby" | "ludo_game" | "ludo_turn";
 type ServerSource = "ticker" | "pulse" | "page" | LudoSource;
 
 /** Histogram upper edges (ms); the last bucket is "over the last edge". Same column count for both sets. */
@@ -28,6 +28,8 @@ const SLOW_GOOD_MS: Record<ServerSource, number> = {
   ludo_connect: 500,
   ludo_lobby: 60_000,
   ludo_game: Number.MAX_SAFE_INTEGER,
+  // Think time: kept in full only when a human is slow to act (an early patience signal).
+  ludo_turn: 15_000,
 };
 /** Cap on detailed rows per source per day, so a storm (bots, spam, an outage) cannot bloat the ledger. */
 const MAX_EVENTS_PER_DAY = 500;

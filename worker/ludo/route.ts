@@ -2,6 +2,7 @@
 // formats, and nothing personal stored (the key is a random per-tab seat token, not an identity).
 import type { Env } from "../env";
 import { record } from "../log";
+import { detail } from "./telemetry";
 
 const ROOM = /^(s-[a-f0-9]{16}|c-[A-Z0-9]{4,6})$/;
 const KEY = /^[a-f0-9]{16}$/;
@@ -23,10 +24,11 @@ export async function ludoApi(request: Request, env: Env, ctx: ExecutionContext)
     const res = await env.LUDO.get(env.LUDO.idFromName(room)).fetch(request);
     // 4xx from the room (full, busy) is a correct answer, not a failure of the service.
     const outcome = res.status === 101 || res.status < 500 ? "ok" : "error";
-    record(env, { op: "ludo_connect", outcome, status: res.status, ms: Date.now() - started, detail: room.slice(0, 2) }, ctx);
+    const result = res.status === 101 ? "open" : res.status === 409 ? "full" : res.status === 429 ? "busy" : res.status < 500 ? "rejected" : "error";
+    record(env, { op: "ludo_connect", outcome, status: res.status, ms: Date.now() - started, detail: detail({ mode: room.startsWith("s-") ? "solo" : "code", result }) }, ctx);
     return res;
   } catch (e) {
-    record(env, { op: "ludo_connect", outcome: "error", status: 500, ms: Date.now() - started, detail: e instanceof Error ? e.message.slice(0, 80) : "connect failed" }, ctx);
+    record(env, { op: "ludo_connect", outcome: "error", status: 500, ms: Date.now() - started, detail: detail({ mode: room.startsWith("s-") ? "solo" : "code", result: "error", reason: e instanceof Error ? e.name : "connect" }) }, ctx);
     return new Response("room unavailable", { status: 503 });
   }
 }

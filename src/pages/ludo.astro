@@ -8,7 +8,8 @@ import Base from "../layouts/Base.astro";
   <h1>Ludo</h1>
   <p>
     Play alone against three server bots, or share a code with up to three friends. Every roll and move is decided and
-    timed on the server, so this page measures how long an interaction really takes.
+    timed on the server, so this page measures how long an interaction really takes. The results appear on{" "}
+    <a href="/reliability/#ludo">Live reliability</a>.
   </p>
 
   <div class="controls" data-setup>
@@ -20,12 +21,21 @@ import Base from "../layouts/Base.astro";
   </div>
 
   <div class="table" data-table hidden>
-    <canvas data-board width="600" height="600" aria-label="Ludo board"></canvas>
+    <canvas data-board aria-label="Ludo board"></canvas>
     <div class="side">
       <p class="status" aria-live="polite" data-status>Connecting…</p>
-      <p class="dice" data-dice>–</p>
-      <button type="button" data-roll disabled>Roll</button>
+      <div class="dice-row">
+        <button type="button" class="die" data-die data-face="0" aria-label="Roll the die" disabled>
+          <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+        </button>
+        <button type="button" data-roll disabled>Roll</button>
+      </div>
       <button type="button" data-start hidden>Start now with bots</button>
+
+      <h2 class="mini">Rolls</h2>
+      <div class="ticker" data-mine></div>
+      <div data-others></div>
+
       <dl class="latency">
         <dt>Your last action</dt><dd data-act>–</dd>
         <dt>Round trip</dt><dd data-rtt>–</dd>
@@ -47,10 +57,46 @@ import Base from "../layouts/Base.astro";
   .or { color: var(--muted); }
   button { font: inherit; padding: 0.4rem 0.9rem; cursor: pointer; }
   button:disabled { cursor: default; opacity: 0.5; }
-  .table { display: grid; grid-template-columns: minmax(0, 600px) 12rem; gap: 1rem; align-items: start; }
-  canvas { width: 100%; height: auto; border: 1px solid var(--line); border-radius: 6px; cursor: pointer; touch-action: manipulation; }
+  /* The board breaks out of the 42rem text column so tokens stay legible; it never exceeds the viewport. */
+  .table {
+    display: grid; grid-template-columns: minmax(0, 1fr) 14rem; gap: 1.25rem; align-items: start;
+    width: min(62rem, calc(100vw - 2rem)); position: relative; left: 50%; transform: translateX(-50%);
+  }
+  canvas { width: 100%; aspect-ratio: 1; border: 1px solid var(--line); border-radius: 6px; cursor: pointer; touch-action: manipulation; display: block; }
   .status { min-height: 3em; margin: 0 0 0.5rem; }
-  .dice { font-size: 2.5rem; font-weight: 700; margin: 0.25rem 0; line-height: 1; }
+  .dice-row { display: flex; align-items: center; gap: 0.75rem; margin: 0.25rem 0 0.75rem; }
+
+  /* The die: a 3 × 3 pip grid; data-face picks which pips show. Colour follows whose turn it is. */
+  .die {
+    --pip: #1b1b1a;
+    width: 4rem; height: 4rem; padding: 0.45rem; border-radius: 0.8rem;
+    background: #fff; border: 3px solid var(--die-ring, #9a978c);
+    display: grid; grid-template: repeat(3, 1fr) / repeat(3, 1fr); place-items: center;
+    box-shadow: 0 2px 0 rgba(0, 0, 0, 0.15);
+  }
+  .die:disabled { opacity: 1; }
+  .die:not(:disabled) { box-shadow: 0 0 0 4px color-mix(in srgb, var(--die-ring) 35%, transparent), 0 2px 0 rgba(0, 0, 0, 0.15); }
+  .die span { width: 0.62rem; height: 0.62rem; border-radius: 50%; background: var(--pip); visibility: hidden; }
+  .die[data-face="1"] span:nth-child(5),
+  .die[data-face="2"] :is(span:nth-child(1), span:nth-child(9)),
+  .die[data-face="3"] :is(span:nth-child(1), span:nth-child(5), span:nth-child(9)),
+  .die[data-face="4"] :is(span:nth-child(1), span:nth-child(3), span:nth-child(7), span:nth-child(9)),
+  .die[data-face="5"] :is(span:nth-child(1), span:nth-child(3), span:nth-child(5), span:nth-child(7), span:nth-child(9)),
+  .die[data-face="6"] :is(span:nth-child(1), span:nth-child(3), span:nth-child(4), span:nth-child(6), span:nth-child(7), span:nth-child(9)) { visibility: visible; }
+  .die.rolling { animation: tumble 0.35s linear infinite; }
+  @keyframes tumble { 0% { transform: rotate(0) scale(1); } 50% { transform: rotate(180deg) scale(0.9); } 100% { transform: rotate(360deg) scale(1); } }
+  @media (prefers-reduced-motion: reduce) { .die.rolling { animation: none; } }
+
+  .mini { font-size: 0.875rem; margin: 0.75rem 0 0.35rem; color: var(--muted); font-weight: 600; }
+  /* Tickers and chips are built at runtime (innerHTML), so these rules must be global to reach them. */
+  :global(.ticker) { display: flex; flex-wrap: wrap; gap: 0.25rem; align-items: center; margin: 0 0 0.4rem; min-height: 1.6rem; }
+  :global(.ticker .who) { font-size: 0.75rem; color: var(--muted); width: 100%; }
+  :global(.chip) {
+    min-width: 1.5rem; height: 1.5rem; border-radius: 0.35rem; display: inline-grid; place-items: center;
+    font-size: 0.8125rem; font-weight: 700; color: #fff; font-variant-numeric: tabular-nums;
+  }
+  :global(.chip.six) { outline: 2px solid #1b1b1a; outline-offset: 1px; }
+  :global(.chip.latest) { transform: scale(1.12); }
   .latency { display: grid; grid-template-columns: auto auto; gap: 0.15rem 0.75rem; font-size: 0.875rem; margin: 1rem 0 0; }
   .latency dd { margin: 0; font-variant-numeric: tabular-nums; }
   .small { font-size: 0.8125rem; }
@@ -67,6 +113,8 @@ import Base from "../layouts/Base.astro";
     die: number | null;
     legal: number[];
     winner: number | null;
+    rolls: number[][];
+    lastRoller: number | null;
     mode: "solo" | "code";
     turnEndsAt: number | null;
   };
@@ -75,17 +123,21 @@ import Base from "../layouts/Base.astro";
   const board = $<HTMLCanvasElement>("[data-board]");
   const ctx2d = board.getContext("2d")!;
   const statusEl = $<HTMLElement>("[data-status]");
-  const diceEl = $<HTMLElement>("[data-dice]");
+  const dieEl = $<HTMLButtonElement>("[data-die]");
   const rollBtn = $<HTMLButtonElement>("[data-roll]");
   const startBtn = $<HTMLButtonElement>("[data-start]");
+  const mineEl = $<HTMLElement>("[data-mine]");
+  const othersEl = $<HTMLElement>("[data-others]");
   const actEl = $<HTMLElement>("[data-act]");
   const rttEl = $<HTMLElement>("[data-rtt]");
   const roomEl = $<HTMLElement>("[data-room]");
   const codeInput = $<HTMLInputElement>("[data-code]");
 
-  const COLORS = ["#d64545", "#2f9e57", "#e0b100", "#2f6fd6"];
+  const COLORS = ["#d64545", "#2f9e57", "#d9a400", "#2f6fd6"];
   const NAMES = ["Red", "Green", "Yellow", "Blue"];
-  const C = 40; // cell size in canvas pixels (15 × 15 grid)
+  const N = 15; // grid cells per side
+  const SIZE = 600; // logical canvas size; scaled for the screen's pixel density
+  const C = SIZE / N;
 
   // The shared 52-square track, starting at Red's entry square, clockwise.
   const TRACK: [number, number][] = [
@@ -127,23 +179,32 @@ import Base from "../layouts/Base.astro";
   let view: View | null = null;
   let you = -1;
 
-  function draw(): void {
+  function fitCanvas(): void {
+    const dpr = Math.min(window.devicePixelRatio || 1, 3);
+    const px = Math.round(board.clientWidth * dpr) || SIZE;
+    if (board.width !== px) {
+      board.width = px;
+      board.height = px;
+    }
+    ctx2d.setTransform(px / SIZE, 0, 0, px / SIZE, 0, 0);
+  }
+
+  function drawBoard(): void {
     const g = ctx2d;
     g.fillStyle = "#fbfbf9";
-    g.fillRect(0, 0, 600, 600);
+    g.fillRect(0, 0, SIZE, SIZE);
     YARD_BASE.forEach(([x, y], s) => {
       g.fillStyle = COLORS[s]!;
-      g.globalAlpha = 0.85;
       g.fillRect(x * C, y * C, 6 * C, 6 * C);
-      g.globalAlpha = 1;
       g.fillStyle = "#fff";
       g.fillRect((x + 1) * C, (y + 1) * C, 4 * C, 4 * C);
     });
     TRACK.forEach(([x, y], i) => {
       const startSeat = START.indexOf(i);
-      g.fillStyle = startSeat >= 0 ? COLORS[startSeat]! : SAFE.has(i) ? "#e8e6df" : "#fff";
+      g.fillStyle = startSeat >= 0 ? COLORS[startSeat]! : SAFE.has(i) ? "#ebe9e2" : "#fff";
       g.fillRect(x * C, y * C, C, C);
       g.strokeStyle = "#c9c7bf";
+      g.lineWidth = 1;
       g.strokeRect(x * C, y * C, C, C);
       if (SAFE.has(i) && startSeat < 0) {
         g.fillStyle = "#9a978c";
@@ -161,39 +222,189 @@ import Base from "../layouts/Base.astro";
         g.strokeRect(x * C, y * C, C, C);
       }),
     );
-    g.fillStyle = "#e8e6df";
-    g.fillRect(6 * C, 6 * C, 3 * C, 3 * C);
-
-    if (!view) return;
-    view.tokens.forEach((list, s) => {
-      if (view!.seats[s] === "empty") return;
-      list.forEach((p, t) => {
-        const [cx, cy] = cellOf(s, t, p);
-        const movable = view!.phase === "move" && view!.turn === s && s === you && view!.legal.includes(t);
-        g.beginPath();
-        g.arc(cx * C, cy * C, movable ? 15 : 13, 0, Math.PI * 2);
-        g.fillStyle = COLORS[s]!;
-        g.fill();
-        g.lineWidth = movable ? 4 : 2;
-        g.strokeStyle = movable ? "#111" : "#fff";
-        g.stroke();
-        g.fillStyle = "#fff";
-        g.font = "bold 13px system-ui";
-        g.textAlign = "center";
-        g.textBaseline = "middle";
-        g.fillText(String(t + 1), cx * C, cy * C);
-      });
+    // Centre: four triangles pointing home.
+    const cx = 7.5 * C;
+    const cy = 7.5 * C;
+    const tri: [number, number][][] = [
+      [[6, 6], [6, 9]],
+      [[6, 6], [9, 6]],
+      [[9, 6], [9, 9]],
+      [[6, 9], [9, 9]],
+    ];
+    tri.forEach(([[ax, ay], [bx, by]], s) => {
+      g.beginPath();
+      g.moveTo(ax * C, ay * C);
+      g.lineTo(bx * C, by * C);
+      g.lineTo(cx, cy);
+      g.closePath();
+      g.fillStyle = COLORS[s]!;
+      g.fill();
     });
   }
+
+  function token(x: number, y: number, seat: number, label: string, highlight: boolean, r = 13): void {
+    const g = ctx2d;
+    const rr = highlight ? r + 2 : r;
+    g.beginPath();
+    g.ellipse(x, y + 3, rr, rr * 0.55, 0, 0, Math.PI * 2);
+    g.fillStyle = "rgba(0,0,0,0.25)";
+    g.fill();
+    g.beginPath();
+    g.arc(x, y, rr, 0, Math.PI * 2);
+    g.fillStyle = COLORS[seat]!;
+    g.fill();
+    g.lineWidth = highlight ? 4 : 2;
+    g.strokeStyle = highlight ? "#111" : "#fff";
+    g.stroke();
+    if (!label) return;
+    g.fillStyle = "#fff";
+    g.font = `bold ${Math.round(rr * 0.95)}px system-ui`;
+    g.textAlign = "center";
+    g.textBaseline = "middle";
+    g.fillText(label, x, y + 0.5);
+  }
+
+  function badge(x: number, y: number, n: number): void {
+    const g = ctx2d;
+    g.beginPath();
+    g.arc(x, y, 8, 0, Math.PI * 2);
+    g.fillStyle = "#1b1b1a";
+    g.fill();
+    g.strokeStyle = "#fff";
+    g.lineWidth = 1.5;
+    g.stroke();
+    g.fillStyle = "#fff";
+    g.font = "bold 11px system-ui";
+    g.textAlign = "center";
+    g.textBaseline = "middle";
+    g.fillText(String(n), x, y + 0.5);
+  }
+
+  /** Offsets for 1–4 colours sharing one square: side by side, then a 2 × 2 grid. */
+  const SPOTS: [number, number][][] = [
+    [[0, 0]],
+    [[-9, 0], [9, 0]],
+    [[-9, -8], [9, -8], [0, 9]],
+    [[-9, -9], [9, -9], [-9, 9], [9, 9]],
+  ];
+
+  /** Same-colour tokens on a square stack like coins with a count badge; different colours each get their own spot. */
+  function drawTokens(): void {
+    if (!view) return;
+    const v = view;
+    const cells = new Map<string, Map<number, { t: number; x: number; y: number }[]>>();
+    v.tokens.forEach((list, seat) => {
+      if (v.seats[seat] === "empty") return;
+      list.forEach((p, t) => {
+        const [x, y] = cellOf(seat, t, p);
+        const k = `${x.toFixed(2)},${y.toFixed(2)}`;
+        const bySeat = cells.get(k) ?? new Map();
+        const arr = bySeat.get(seat) ?? [];
+        arr.push({ t, x, y });
+        bySeat.set(seat, arr);
+        cells.set(k, bySeat);
+      });
+    });
+    for (const bySeat of cells.values()) {
+      const seats = [...bySeat.keys()].sort((a, b) => a - b);
+      const shared = seats.length > 1;
+      const r = shared ? 11 : 15;
+      seats.forEach((seat, j) => {
+        const stack = bySeat.get(seat)!;
+        const [ox, oy] = SPOTS[seats.length - 1]![j]!;
+        const n = stack.length;
+        stack.forEach((e, i) => {
+          const x = e.x * C + ox - i * 2.5;
+          const y = e.y * C + oy - i * 4;
+          const top = i === n - 1;
+          const movable = v.phase === "move" && v.turn === seat && seat === you && v.legal.includes(e.t);
+          token(x, y, seat, top && !shared ? String(e.t + 1) : "", movable && top, r);
+        });
+        if (n > 1) {
+          const top = stack[n - 1]!;
+          badge(top.x * C + ox - (n - 1) * 2.5 + r * 0.8, top.y * C + oy - (n - 1) * 4 - r * 0.8, n);
+        }
+      });
+    }
+  }
+
+  function draw(): void {
+    fitCanvas();
+    drawBoard();
+    drawTokens();
+  }
+
+  // ── Die ────────────────────────────────────────────────────────────────────────
+  let rollingTimer: number | undefined;
+  let rollingSince = 0;
+  const MIN_TUMBLE_MS = 350; // long enough to read as a throw; never longer than the server's answer needs
+
+  function startTumble(seat: number): void {
+    dieEl.style.setProperty("--die-ring", COLORS[seat]!);
+    if (rollingTimer !== undefined) return;
+    rollingSince = performance.now();
+    dieEl.classList.add("rolling");
+    rollingTimer = window.setInterval(() => (dieEl.dataset.face = String(1 + Math.floor(Math.random() * 6))), 70);
+  }
+
+  function showFace(face: number | null, seat: number): void {
+    const settle = () => {
+      window.clearInterval(rollingTimer);
+      rollingTimer = undefined;
+      dieEl.classList.remove("rolling");
+      dieEl.dataset.face = face === null ? "0" : String(face);
+      dieEl.style.setProperty("--die-ring", COLORS[seat]!);
+    };
+    const left = rollingTimer === undefined ? 0 : MIN_TUMBLE_MS - (performance.now() - rollingSince);
+    if (left > 0) window.setTimeout(settle, left);
+    else settle();
+  }
+
+  // ── Roll history ───────────────────────────────────────────────────────────────
+  function chips(list: number[], seat: number): string {
+    return list
+      .map((d, i) => `<span class="chip${d === 6 ? " six" : ""}${i === list.length - 1 ? " latest" : ""}" style="background:${COLORS[seat]}">${d}</span>`)
+      .join("");
+  }
+
+  function renderTickers(v: View): void {
+    const mine = (v.rolls[you] ?? []).slice(-10);
+    mineEl.innerHTML = `<span class="who">You (${NAMES[you]}), last 10</span>${mine.length ? chips(mine, you) : '<span class="who">no rolls yet</span>'}`;
+    othersEl.innerHTML = v.seats
+      .map((kind, s) => {
+        if (s === you || kind === "empty") return "";
+        const last = (v.rolls[s] ?? []).slice(-5);
+        return `<div class="ticker"><span class="who">${NAMES[s]}${kind === "bot" ? " (bot)" : ""}, last 5</span>${
+          last.length ? chips(last, s) : '<span class="who">no rolls yet</span>'
+        }</div>`;
+      })
+      .join("");
+  }
+
+  // ── Rendering a state ──────────────────────────────────────────────────────────
+  let lastRollCount = -1;
 
   function render(): void {
     draw();
     if (!view) return;
     const v = view;
-    diceEl.textContent = v.die === null ? "–" : String(v.die);
     const mine = v.turn === you;
-    rollBtn.disabled = !(mine && v.phase === "roll");
+    const canRoll = mine && v.phase === "roll";
+    rollBtn.disabled = !canRoll;
+    dieEl.disabled = !canRoll;
     startBtn.hidden = v.phase !== "lobby";
+
+    // A new roll anywhere (yours, a bot's, a friend's) tumbles the die, then lands on the server's number.
+    const rollCount = v.rolls.reduce((n, r) => n + r.length, 0);
+    const lastRoller = v.lastRoller ?? v.turn;
+    if (lastRollCount >= 0 && rollCount > lastRollCount && rollingTimer === undefined) startTumble(lastRoller);
+    lastRollCount = rollCount;
+    // The die keeps the last number thrown until the next throw, so a bot's roll stays readable.
+    showFace(v.rolls[lastRoller]?.at(-1) ?? null, lastRoller);
+    if (canRoll) dieEl.style.setProperty("--die-ring", COLORS[you]!);
+
+    renderTickers(v);
+
     const who = (s: number) => `${NAMES[s]}${s === you ? " (you)" : v.seats[s] === "bot" ? " (bot)" : ""}`;
     if (v.phase === "lobby") {
       const n = v.seats.filter((k) => k === "human").length;
@@ -202,12 +413,14 @@ import Base from "../layouts/Base.astro";
       statusEl.textContent = `${who(v.winner ?? 0)} wins.`;
     } else if (mine) {
       const left = v.turnEndsAt ? Math.max(0, Math.round((v.turnEndsAt - Date.now()) / 1000)) : null;
-      statusEl.textContent = v.phase === "roll" ? `Your turn: roll.${left !== null ? ` ${left}s left.` : ""}` : "Pick a highlighted token.";
+      statusEl.textContent =
+        v.phase === "roll" ? `Your turn: roll the die.${left !== null ? ` ${left}s left.` : ""}` : "Pick a highlighted token.";
     } else {
       statusEl.textContent = `${who(v.turn)} to ${v.phase}.`;
     }
   }
 
+  // ── Connection ────────────────────────────────────────────────────────────────
   let ws: WebSocket | null = null;
   let room = "";
   let pendingAt: number | null = null;
@@ -235,6 +448,12 @@ import Base from "../layouts/Base.astro";
     ws.send(JSON.stringify(body));
   }
 
+  function roll(): void {
+    if (!view || view.turn !== you || view.phase !== "roll") return;
+    startTumble(you);
+    send({ t: "roll" }, true);
+  }
+
   function connect(r: string): void {
     room = r;
     $<HTMLElement>("[data-setup]").hidden = true;
@@ -242,20 +461,23 @@ import Base from "../layouts/Base.astro";
     roomEl.textContent = r.startsWith("c-") ? `Code: ${r.slice(2)}. Share it; up to four can join.` : "Solo game against three server bots.";
     const proto = location.protocol === "https:" ? "wss" : "ws";
     ws = new WebSocket(`${proto}://${location.host}/api/ludo?room=${encodeURIComponent(r)}&key=${keyFor(r)}`);
+    let pingSent = performance.now();
     ws.onopen = () => {
       retries = 0;
+      pingSent = performance.now();
       send({ t: "ping" });
       window.clearInterval(pingTimer);
-      pingTimer = window.setInterval(() => send({ t: "ping" }), 15_000);
+      pingTimer = window.setInterval(() => {
+        pingSent = performance.now();
+        send({ t: "ping" });
+      }, 15_000);
     };
-    let pingSent = performance.now();
     ws.onmessage = (e) => {
       const m = JSON.parse(String(e.data));
       if (m.t === "probe") {
         // Echo at once: the server times the round trip, so the figure is not this browser's claim.
         send({ t: "echo", s: m.s });
         rttEl.textContent = `${Math.round(performance.now() - pingSent)} ms`;
-        pingSent = performance.now();
       } else if (m.t === "state") {
         you = m.you;
         view = m.g;
@@ -266,6 +488,7 @@ import Base from "../layouts/Base.astro";
         render();
       } else if (m.t === "err") {
         pendingAt = null;
+        if (view) showFace(view.rolls[view.lastRoller ?? view.turn]?.at(-1) ?? null, view.lastRoller ?? view.turn);
         statusEl.textContent = `Not allowed: ${String(m.code).replace(/_/g, " ")}.`;
       }
     };
@@ -294,15 +517,22 @@ import Base from "../layouts/Base.astro";
     }
     connect(`c-${code}`);
   });
-  rollBtn.addEventListener("click", () => send({ t: "roll" }, true));
+  rollBtn.addEventListener("click", roll);
+  dieEl.addEventListener("click", roll);
+  document.addEventListener("keydown", (e) => {
+    if ((e.key === " " || e.key === "Enter") && document.activeElement === document.body) {
+      e.preventDefault();
+      roll();
+    }
+  });
   startBtn.addEventListener("click", () => send({ t: "start" }, true));
   board.addEventListener("click", (e) => {
     if (!view || view.phase !== "move" || view.turn !== you) return;
     const rect = board.getBoundingClientRect();
-    const x = ((e.clientX - rect.left) / rect.width) * 15;
-    const y = ((e.clientY - rect.top) / rect.height) * 15;
+    const x = ((e.clientX - rect.left) / rect.width) * N;
+    const y = ((e.clientY - rect.top) / rect.height) * N;
     let best = -1;
-    let bestD = 0.8;
+    let bestD = 0.9;
     view.legal.forEach((t) => {
       const [cx, cy] = cellOf(you, t, view!.tokens[you]![t]!);
       const d = Math.hypot(cx - x, cy - y);
@@ -313,6 +543,7 @@ import Base from "../layouts/Base.astro";
     });
     if (best >= 0) send({ t: "move", token: best }, true);
   });
+  window.addEventListener("resize", () => draw());
   window.setInterval(() => view?.turnEndsAt && render(), 1000);
   draw();
 </script>

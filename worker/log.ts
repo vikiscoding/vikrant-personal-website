@@ -8,7 +8,7 @@ export type Outcome = "ok" | "degraded" | "error";
 export type Dep = "github" | "kv" | "assets" | "none";
 
 export interface SliEvent {
-  op: "ticker" | "page" | "pulse_api" | "visits" | "ludo_action" | "ludo_rtt" | "ludo_connect" | "ludo_lobby" | "ludo_game";
+  op: "ticker" | "page" | "pulse_api" | "visits" | "ludo_action" | "ludo_rtt" | "ludo_connect" | "ludo_lobby" | "ludo_game" | "ludo_turn";
   outcome: Outcome;
   status: number;
   ms: number;
