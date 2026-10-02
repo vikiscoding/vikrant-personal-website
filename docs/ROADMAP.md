@@ -20,6 +20,7 @@ Engineering roadmap for vikrantsingh.fyi. Decisions are in [`docs/adr/`](adr/REA
 | Headline "IT Operations and Engineering"; Balance-Books added as proof (ADR-023) | 1 Oct 2026 |
 | Nav item **Play**, last (ADR-024) | 1 Oct 2026 |
 | Incident desk: the AI-priority rule is dated; the old ticket shows the rule it ran under; the owner's latest note shows on each ticket (ADR-025) | 1 Oct 2026 |
+| Ludo: server-path latency testbed with server-measured SLIs, bots, invite links, room chat in any language, full screen on phones (ADR-026) | 2 Oct 2026 |
 
 ## Next
 
@@ -30,7 +31,8 @@ Engineering roadmap for vikrantsingh.fyi. Decisions are in [`docs/adr/`](adr/REA
 
 ## Later (ideas, not scheduled)
 
-- **Pulse run server actions, for a user-journey SLO.** Today the game's telemetry is client-only and spoofable, so it can never be an SLO (ADR-015). Give the game a few small server calls during a session (for example a checkpoint at start, at each 30 s and at game over) and measure them **on the server**: success rate and latency per session. That makes a trustworthy journey-level SLI, a candidate third SLO ("a game session's server calls succeed and return within N ms"), and a way to stress-test the user-facing path deliberately (`FAULT` values such as `game_api_slow` / `game_api_5xx`).
+- **Ludo objectives held for a full window.** After 30 days of real play, decide whether `ludo_action` and `ludo_rtt` become SLOs with budgets, and whether a `FAULT=ludo_slow` game day earns a write-up.
+- **Pulse run server actions, for a user-journey SLO.** (Ludo now covers a server-measured journey; revisit whether this is still needed.) Today the game's telemetry is client-only and spoofable, so it can never be an SLO (ADR-015). Give the game a few small server calls during a session (for example a checkpoint at start, at each 30 s and at game over) and measure them **on the server**: success rate and latency per session. That makes a trustworthy journey-level SLI, a candidate third SLO ("a game session's server calls succeed and return within N ms"), and a way to stress-test the user-facing path deliberately (`FAULT` values such as `game_api_slow` / `game_api_5xx`).
   - Guardrails before building: an ADR; no shared state written by visitors (read-mostly or per-session only); validation and a per-session rate cap like `/api/rum`; recorded in the SLI ledger as its own source; `/privacy` updated first; never feeds paging until it has a full 30-day window.
 
 ## Parked
@@ -42,4 +44,4 @@ Each of these needs a written reason before it moves.
 - A traffic-aware config loop that proposes changes as pull requests and never applies them
 - Sparklines on the dashboard (after 30 days of data)
 - Analytics Engine (enable failed with code 10089), cookieless Web Analytics, turning off the `workers.dev` fallback
-- Never: a second game, leaderboards or accounts, visitor-triggered incidents, auto-remediation
+- Never: a third game, leaderboards or accounts, visitor-triggered incidents, auto-remediation

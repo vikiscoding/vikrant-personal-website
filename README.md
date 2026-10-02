@@ -22,6 +22,7 @@ A personal site, **operated in public**. A static page on a CDN almost never fai
 - **The SLI ledger** records every scheduled run, probe hit, page view and game event: failures in full, successes counted. The [dashboard](https://vikrantsingh.fyi/reliability/) and `/api/slo` read it.
 - **The incident desk:** after two failed runs, the Worker raises an incident in the [incident engine](https://github.com/vikiscoding/vikrant_perswebsite_incidents_aiengine). An AI proposes triage and drafts that are never sent; every later step is a human command on a GitHub Issue.
 - **Pulse run** (`/play/`) is a 30-second browser game whose errors and frame times are the client-side signal.
+- **Ludo** (`/ludo/`) is a server-authoritative multiplayer game (bots, invite links, room chat) whose connects, moves and round trips are timed on the server: the server-path signal ([docs/ludo-telemetry.md](docs/ludo-telemetry.md)).
 
 ## Read the record
 

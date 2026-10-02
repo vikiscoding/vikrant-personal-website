@@ -11,9 +11,9 @@ The owner's personal site (headline, proof items, résumé, contact) plus a smal
 | Path | Holds |
 | --- | --- |
 | `src/data/profile.ts` | All site copy. The only place to edit words. |
-| `src/pages/` | `index`, `reliability` (dashboard), `play` (Pulse run), `notes/` (Writing, how-this-site-is-run, postmortems), `exhibits/*`, `privacy` |
+| `src/pages/` | `index`, `reliability` (dashboard), `play` (Pulse run), `ludo`, `notes/` (Writing, how-this-site-is-run, postmortems), `exhibits/*`, `privacy` |
 | `src/layouts/Base.astro` | Shell, nav and wordmark, share tags, and the footer `[data-pulse]` slot |
-| `worker/index.ts` | Routes: `/api/pulse`, `/api/slo`, `/api/rum`, pages, cron |
+| `worker/index.ts` | Routes: `/api/pulse`, `/api/slo`, `/api/rum`, `/api/ludo`, pages, cron |
 | `worker/ticker.ts` | Cron: GitHub → KV snapshot, then the incident-desk signal |
 | `worker/pulse.ts` | Snapshot read, page injection (degrade open), probe endpoint |
 | `worker/ledger.ts`, `worker/slo.ts` | SLI ledger (Durable Object) and the SLO window |
@@ -22,17 +22,17 @@ The owner's personal site (headline, proof items, résumé, contact) plus a smal
 | `worker/rum.ts` | Pulse run telemetry endpoint (the only public write path) |
 | `worker/log.ts` | The one log/SLI event shape (`docs/log-schema.md`) |
 | `worker/faults.ts` | Deploy-time game-day switch |
-| `worker/ludo/`, `src/pages/ludo.astro` | Ludo latency testbed, **proposed** (ADR-026; branch only until its rule conflicts are resolved): `engine.ts` (pure, seeded rules), `room.ts` (one Durable Object per room), `route.ts` (WebSocket upgrade), `telemetry.ts` (event schema). Doc: `docs/ludo-telemetry.md` |
+| `worker/ludo/`, `src/pages/ludo.astro` | Ludo, the server-path latency testbed (ADR-026): `engine.ts` (pure, seeded rules), `room.ts` (one Durable Object per room), `route.ts` (WebSocket upgrade), `telemetry.ts` (event schema). Doc: `docs/ludo-telemetry.md` |
 | `scripts/` | Brand-asset generator |
 | `docs/` | Status, roadmap, ADRs, SLOs, runbook, game days, templates |
 
 ## Rules
 
-- **Four proof items, no more** (ADR-022, ADR-023): this site's reliability (with Pulse run inside it), the incident desk, Balance-Books, Atlas Flow. Pulse run is a bounded client-path testbed, never the homepage hero; no second game on this domain. Never add other projects.
+- **Four proof items, no more** (ADR-022, ADR-023): this site's reliability (with Pulse run and Ludo inside it), the incident desk, Balance-Books, Atlas Flow. Pulse run (client path) and Ludo (server path) are bounded testbeds, never the homepage hero; no third game on this domain (ADR-026). Never add other projects.
 - **Every figure traces to the résumé or the owner's explicit confirmation.** "Scope:" lines say what a thing is not; they come after the text, never first.
 - **Pulse run copy:** never "production-grade gaming platform"; no invented SLOs; no numbers on the home card until real samples exist; never link it to the Incident-AI or Atlas Flow videos or essays.
 - **The incident desk only reports, never decides** (ADR-016): the Worker sends `site_alert`/`site_recovered`; every decision after intake is the owner's command on GitHub. Never add a visitor-triggered incident path.
-- **`/api/rum` is the only public write path.** Validate everything (origin, size, type, bounds), store no IP, user agent or cookie, and never feed it into an SLO or an alert. Update `/privacy` before changing what it collects.
+- **`/api/rum` and `/api/ludo` are the only public write paths** (ADR-015, ADR-026). Validate everything (origin, size, type, bounds, rate), store no IP, user agent or cookie. `/api/rum` is client-reported and never feeds an SLO or an alert; Ludo's SLIs are server-measured. Names and chat stay in the room and never reach telemetry. Update `/privacy` before changing what either collects.
 - **Keep personal planning out of this repo.** It is public.
 - **Never invent** numbers, clients or testimonials. Unconfirmed copy stays marked `TODO`.
 - **Nav labels stay literal:** Home · Live reliability · Writing · Play (ADR-024; Play stays last). No "observability" or "SLO console" in public labels. No gradients, galleries or stock hero.

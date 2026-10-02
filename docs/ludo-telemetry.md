@@ -1,6 +1,6 @@
 # Ludo: interaction-latency testbed
 
-`/ludo/` is a server-authoritative Ludo game. It exists to measure how long a real interaction takes, end to end, on a path this site owns. Proposed in ADR-026; it conflicts with ADR-015's "no game two" stop rule until that ADR is accepted.
+`/ludo/` is a server-authoritative Ludo game. It exists to measure how long a real interaction takes, end to end, on a path this site owns. Accepted in ADR-026 (2 Oct 2026), which supersedes ADR-015's "no game two" stop rule; the stop rule is now "no third game".
 
 ## How it runs
 

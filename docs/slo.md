@@ -28,6 +28,7 @@ Window: rolling 30 days. Sources: **black-box** (external probe) and **white-box
 | --- | --- |
 | Page degraded rate (`op=page`, `outcome=degraded` / all) | Volume depends on visitors and crawlers. Promote once it exceeds about 1,000 events a month. |
 | Page Worker time p95 (`op=page`, `double2`) | Same reason. Page speed stays a CI budget (L2). |
+| **Server path (Ludo, ADR-026):** connects answered (proposed 99.5%), actions on time (≤ 100 ms server time for a person, ≤ 250 ms late for a bot; proposed 99%), round trips ≤ 300 ms (proposed 95%); lobby starts, turn timeouts and game completion tracked | Server-measured, so trustworthy, but volume depends on people playing. Promote to SLOs with budgets after a full 30-day window of real play. Details: [ludo-telemetry.md](ludo-telemetry.md) |
 | **Client path (Pulse run, ADR-015):** sessions started, game error rate, p95 frame time, % sessions with jank | Client-only and spoofable (public beacon). Shown as observations with the bound "Does not prove server capacity or ITSM readiness". Never an SLO or an alert |
 
 ## Alerting

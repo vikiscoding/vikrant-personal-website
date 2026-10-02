@@ -92,17 +92,19 @@ export const profile = {
     // Web copy: mobile number and personal Gmail removed; contact@vikrantsingh.fyi only.
     resume: "/resume.pdf" as string | null,
   },
-  // "Proof you can open" (ADR-022, ADR-023). Pulse run is folded into the reliability item (it feeds the client-side signal).
+  // "Proof you can open" (ADR-022, ADR-023). Pulse run (client-side signal) and Ludo (server-side interaction latency,
+  // ADR-026) are folded into the reliability item, so the proof stays at four items.
   // Never point Atlas Flow at the Incident-AI videos; its repo is in a private client organisation.
   proof: [
     {
       title: "This site's reliability",
       chip: "Live",
-      text: "Two service level objectives with live error budgets; an outside probe checks the site every five minutes, and a 30-second game feeds its browser-side numbers. I broke the site on purpose and published the postmortem: eight findings, each with an action and a status.",
+      text: "Two service level objectives with live error budgets; an outside probe checks the site every five minutes. Two small games feed it real traffic: a 30-second runner measures what the browser experiences, and a multiplayer Ludo game measures how long every move takes on the server. I broke the site on purpose and published the postmortem: eight findings, each with an action and a status.",
       links: [
         { label: "Live reliability", href: "/reliability/" },
         { label: "Postmortem", href: "/notes/postmortem-game-day-1/" },
-        { label: "Play the game", href: "/play/" },
+        { label: "Play Ludo", href: "/ludo/" },
+        { label: "Play Pulse run", href: "/play/" },
       ],
     },
     {

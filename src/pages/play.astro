@@ -6,6 +6,10 @@ import Base from "../layouts/Base.astro";
 
 <Base title="Pulse run · vikrantsingh.fyi" description="A 30-second browser runner that reports its own errors and frame times to this site's Live reliability page.">
   <h1>Pulse run</h1>
+  <p class="also">
+    Want something longer, or to play with friends? <a href="/ludo/">Play Ludo →</a> against server bots or on a shared
+    link with chat.
+  </p>
   <p>
     Play for 30 seconds and your run becomes real data on this site's{" "}
     <a href="/reliability/#client-path">Live reliability</a> page: script errors and frame times, nothing about you.
@@ -28,6 +32,7 @@ import Base from "../layouts/Base.astro";
 </Base>
 
 <style>
+  .also { font-size: 0.9375rem; padding: 0.6rem 0.8rem; border: 1px solid var(--line); border-radius: 8px; }
   .stage { margin: 1.5rem 0 0.5rem; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--surface); }
   canvas { display: block; width: 100%; height: auto; aspect-ratio: 16 / 5; touch-action: none; cursor: pointer; outline: none; }
   canvas:focus-visible { box-shadow: inset 0 0 0 2px var(--accent); }
