@@ -12,7 +12,7 @@ import Base from "../layouts/Base.astro";
     straight from its own records.
   </p>
   <div data-dashboard>
-    <p class="dash-note">The live numbers appear here once 30 days of data exist.</p>
+    <p class="dash-note">Reliability data is being collected. The live numbers appear here once the first 30-day window is complete.</p>
   </div>
 </Base>
 
@@ -38,6 +38,12 @@ import Base from "../layouts/Base.astro";
 
   .dash-small { font-size: 0.875rem; margin: 0.35rem 0; }
   .dash-muted { color: var(--muted); }
+  .dash-collecting { border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 10px; padding: 0.9rem 1.1rem; background: var(--surface); display: grid; gap: 0.6rem; }
+  .dash-collecting p { margin: 0; }
+  .dash-collecting-head { font-weight: 650; display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
+  .dash-chip { font-size: 0.75rem; font-weight: 700; letter-spacing: 0.02em; padding: 0.15rem 0.55rem; border-radius: 999px; background: var(--accent); color: var(--bg); }
+  .dash-progress { height: 0.5rem; border-radius: 999px; background: var(--line); overflow: hidden; }
+  .dash-progress span { display: block; height: 100%; border-radius: 999px; background: var(--accent); }
   .dash-note { font-size: 0.875rem; color: var(--muted); background: var(--surface); border-radius: 8px; padding: 0.6rem 0.9rem; margin: 0; }
   .dash-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 

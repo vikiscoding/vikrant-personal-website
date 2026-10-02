@@ -104,15 +104,24 @@ async function dashboardHtml(env: Env): Promise<string | null> {
   if (mode === "off") return null;
   try {
     const win = await readWindow(env, WINDOW_DAYS);
-    if (!win) return null;
+    if (!win) return unavailable();
     const daysWithData = new Set(win.days.map((d) => d.day)).size;
     if (mode === "auto" && daysWithData < WINDOW_DAYS) return null;
     const [pulse, feed, desk] = await Promise.all([readPulse(env).catch(() => null), readFeed(env), readDeskState(env)]);
     return renderDashboard(win, pulse, feed, desk);
   } catch (e) {
     console.error(JSON.stringify({ v: 1, ts: new Date().toISOString(), op: "dashboard", outcome: "error", detail: e instanceof Error ? e.message : "render failed" }));
-    return null;
+    return unavailable();
   }
+}
+
+/** The dashboard is switched on but its records cannot be read right now: say so plainly (degrade open, ADR-010). */
+function unavailable(): string {
+  return `<div class="dash"><section class="dash-card" data-state="warn">
+    <h2>Live numbers are temporarily unavailable</h2>
+    <p>The store that holds this site's reliability records can't be read right now, so the dashboard can't be drawn. The site itself is up, and the outside monitor that checks it every 5 minutes is unaffected.</p>
+    <p class="dash-small dash-muted">Readings missed while the store is unavailable will show as a gap in the first 30-day window. The live heartbeat is still here: <a href="/api/pulse">/api/pulse</a>.</p>
+  </section></div>`;
 }
 
 /** Serve a static page and fill its `[data-pulse]`, `[data-visits]` and `[data-dashboard]` slots. Never fails the page. */

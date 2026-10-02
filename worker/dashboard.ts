@@ -330,6 +330,27 @@ function traffic(win: SloWindow): string {
   return `<p class="dash-small dash-muted">Page requests served in this window: ${n(page.total)} (bots included) · served without the live status line: ${n(page.bad)}.</p>`;
 }
 
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+/** "2026-10-30" → "30 Oct 2026". */
+const longDay = (d: string) => `${Number(d.slice(8))} ${MONTHS.at(Number(d.slice(5, 7)) - 1)} ${d.slice(0, 4)}`;
+
+/**
+ * Shown until the first full 30-day window exists: the numbers below are real and live, but a few days of readings
+ * are not yet a trend, so the page says how far along the window is and when the full picture forms.
+ */
+function collecting(firstDay: string, now: number): string {
+  const today = localDay(new Date(now).toISOString());
+  const elapsed = Math.round((Date.parse(today) - Date.parse(firstDay)) / 864e5) + 1;
+  const day = Math.min(Math.max(elapsed, 1), WINDOW_DAYS);
+  const complete = addDays(firstDay, WINDOW_DAYS);
+  const pct = Math.round((day / WINDOW_DAYS) * 100);
+  return `<section class="dash-collecting" aria-label="Data collection in progress">
+    <p class="dash-collecting-head"><span class="dash-chip">Collecting data</span> Day ${n(day)} of ${WINDOW_DAYS}</p>
+    <div class="dash-progress" role="progressbar" aria-label="First 30-day window" aria-valuemin="0" aria-valuemax="${WINDOW_DAYS}" aria-valuenow="${day}"><span style="width:${pct}%"></span></div>
+    <p class="dash-small">Every number below is live and updates every few minutes. A few days of readings are not yet a trend, though: the objectives, error budgets and 30-day strip become meaningful once the first full window is in, on <strong>${esc(longDay(complete))}</strong>. Until then, read them as early readings.</p>
+  </section>`;
+}
+
 export function renderDashboard(
   win: SloWindow,
   pulse: Pulse | null,
@@ -339,10 +360,7 @@ export function renderDashboard(
 ): string {
   const firstDay = win.days[0]?.day;
   const daysWithData = new Set(win.days.map((d) => d.day)).size;
-  const young =
-    daysWithData < WINDOW_DAYS
-      ? `<p class="dash-note">Only ${daysWithData} day${daysWithData === 1 ? "" : "s"} of data so far (since ${esc(firstDay ?? "today")}). The 30-day figures become meaningful once a full window exists.</p>`
-      : "";
+  const young = firstDay && daysWithData < WINDOW_DAYS ? collecting(firstDay, now) : "";
   // One-line summary (ADR-018): the answer before the evidence.
   const fresh = pulse?.state === "fresh";
   const failing = fresh && (desk?.failures ?? 0) > 0;
