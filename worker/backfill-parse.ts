@@ -78,7 +78,7 @@ export function toEntry(rec: LogRecord, sourceOf: (op: string) => string | null)
   if (!source || !OUTCOMES.has(String(rec.outcome))) return null;
   // A refusal for capacity is a budget limit, not a fault: it is logged, but never counted in the ledger (so it can
   // never burn an objective or look like a failure). The route records it without the ledger; replay must match.
-  if (/result=capacity/.test(rec.detail ?? "")) return null;
+  if (/\bresult=capacity\b/.test(rec.detail ?? "")) return null;
   return {
     ts: rec.ts,
     source,

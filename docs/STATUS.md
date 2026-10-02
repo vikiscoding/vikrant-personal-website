@@ -32,6 +32,7 @@ Last updated: 2 Oct 2026.
 
 - Game day 2 (2 Oct 2026, `FAULT=github_5xx`, held until the outside monitor went Down, then restored and worked through the gate on incident #3): write its record in `docs/gamedays/` from the template, including whether the alert reached the owner.
 - Cloudflare CI token expiry is still `TODO` in `docs/runbook.md`.
+- Ledger gap on 2 Oct 2026 (17:36 UTC to the 00:00 UTC reset, free-tier writes exhausted): seeded as an `events` gap in KV `ledger:gap`; the backfill (ADR-028) replays it from Workers Logs after the reset. Check that `ledger:gap` is gone and `op = ledger_backfill` lines report what was restored.
 - Cloudflare account is on the Free plan: the daily Durable Object limit is shared by production and the dev Worker, so heavy tests on dev can affect the live site. No load tests beyond ~40 rooms until a paid plan.
 - Alert channel: the alert mailbox is near capacity (game day 1, finding 7; owner: site owner).
 - See [`ROADMAP.md`](ROADMAP.md) → Next.
