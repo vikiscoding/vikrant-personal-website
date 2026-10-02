@@ -1,2 +1,4 @@
 # Copy to .dev.vars for `wrangler dev`. Never commit .dev.vars.
 GITHUB_TOKEN=github_pat_xxx
+# Ledger backfill (worker/backfill.ts): API token with Account > Workers Observability > Edit.
+CF_OBSERVABILITY_TOKEN=xxx
