@@ -113,6 +113,7 @@ export const profile = {
       text: "Real alerts from this site go to an AI that proposes triage and drafts updates. Drafts are never sent; resolving and closing are always a person's call, and since 1 Oct 2026 so is priority, in public GitHub issues. If the model is down, the incident record still works.",
       scope: "a Python engine running one site's incidents, not ServiceNow.",
       links: [
+        { label: "Watch a live game day (~9 min)", href: "https://youtu.be/wdwIQ6LTs_Q" },
         { label: "Watch the walkthrough (~14 min)", href: "https://youtu.be/j048FYXrRqs" },
         { label: "See it live", href: "/reliability/#incident-desk" },
         { label: "How it works", href: "/exhibits/incident-ai/" },
