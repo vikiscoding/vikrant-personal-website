@@ -4,6 +4,7 @@
 // Every action is server-authoritative and server-timed, so the latency figures are not client claims.
 import { DurableObject } from "cloudflare:workers";
 import type { Env } from "../env";
+import { isCapacity, nextReset } from "../capacity";
 import { activeFault } from "../faults";
 import type { LedgerEntry } from "../ledger";
 import { record, type SliEvent } from "../log";
@@ -55,6 +56,13 @@ interface Meta {
   /** Room chat, newest last, at most CHAT_KEEP lines; cleared when the last player leaves. */
   chat?: ChatLine[];
   chatSeq?: number;
+}
+
+/** Everything about a room except its move log, stored as ONE record. */
+interface State {
+  game: Game | null;
+  meta: Meta | null;
+  tq: LedgerEntry[];
 }
 
 interface Attachment {
@@ -126,6 +134,16 @@ const FLUSH_AGE_MS = 20_000;
 const PUT_CHUNK = 128;
 const logKey = (i: number) => `log:${String(i).padStart(6, "0")}`;
 
+/** Answer an upgrade with a socket that only says "resting until <reset>" and closes (no storage needed). */
+export function restingSocket(): Response {
+  const pair = new WebSocketPair();
+  const [client, server] = [pair[0], pair[1]];
+  server.accept();
+  server.send(JSON.stringify({ t: "resting", resetAt: nextReset() }));
+  server.close(1013, "capacity");
+  return new Response(null, { status: 101, webSocket: client });
+}
+
 export class LudoRoom extends DurableObject<Env> {
   private game: Game | null = null;
   private meta: Meta | null = null;
@@ -134,12 +152,24 @@ export class LudoRoom extends DurableObject<Env> {
   /** This room's telemetry not yet sent to the ledger, and when the oldest of it was recorded. */
   private tq: LedgerEntry[] = [];
   private tqSince = 0;
+  /** Loaded from the old three-key layout; removed on the next save. */
+  private legacy = false;
 
   private async load(): Promise<void> {
     if (this.game && this.meta) return;
-    this.game = (await this.ctx.storage.get<Game>("game")) ?? null;
-    this.meta = (await this.ctx.storage.get<Meta>("meta")) ?? null;
-    this.tq = (await this.ctx.storage.get<LedgerEntry[]>("tq")) ?? [];
+    const state = await this.ctx.storage.get<State>("state");
+    if (state) {
+      this.game = state.game;
+      this.meta = state.meta;
+      this.tq = state.tq ?? [];
+      this.legacy = false;
+    } else {
+      // Rooms saved before the single state record kept three keys; read them, and fold them in on the next save.
+      this.game = (await this.ctx.storage.get<Game>("game")) ?? null;
+      this.meta = (await this.ctx.storage.get<Meta>("meta")) ?? null;
+      this.tq = (await this.ctx.storage.get<LedgerEntry[]>("tq")) ?? [];
+      this.legacy = this.game !== null || this.meta !== null;
+    }
     this.tqSince = this.tq.length ? Date.now() : 0;
     if (!this.game) return;
     if (this.game.log.length > 0) {
@@ -153,15 +183,22 @@ export class LudoRoom extends DurableObject<Env> {
   }
 
   /**
-   * Scale: the game record is written WITHOUT its action log, and each new action is appended as its own small row,
-   * so a step writes a few hundred bytes instead of the whole log (up to ~50 KB by the end of a game).
+   * Writes are the scarce resource (the Free plan allows 100,000 rows a day for the whole account), so a step costs
+   * about two rows: ONE state record (game without its log, room settings, unsent telemetry) and ONE appended log row
+   * per action. The log is never rewritten; it would be up to ~50 KB by the end of a game.
    */
+  private async persistState(): Promise<void> {
+    const g = this.game;
+    await this.ctx.storage.put("state", { game: g ? { ...g, log: [] } : null, meta: this.meta, tq: this.tq } satisfies State);
+    if (this.legacy) {
+      await this.ctx.storage.delete(["game", "meta", "tq"]);
+      this.legacy = false;
+    }
+  }
+
   private async save(): Promise<void> {
     const g = this.game;
-    if (!g) {
-      await this.ctx.storage.put({ meta: this.meta });
-      return;
-    }
+    if (!g) return this.persistState();
     if (g.log.length < this.savedLog) {
       // A rematch started a new log: clear the old rows first.
       const old = [...(await this.ctx.storage.list({ prefix: "log:" })).keys()];
@@ -171,12 +208,13 @@ export class LudoRoom extends DurableObject<Env> {
     const rows: Record<string, Action> = {};
     for (let i = this.savedLog; i < g.log.length; i++) rows[logKey(i)] = g.log[i]!;
     const keys = Object.keys(rows);
-    for (let i = 0; i + PUT_CHUNK - 3 < keys.length; i += PUT_CHUNK) {
+    for (let i = 0; i + PUT_CHUNK - 1 < keys.length; i += PUT_CHUNK) {
       // Only a legacy game being converted has more rows than one put can carry.
       await this.ctx.storage.put(Object.fromEntries(keys.slice(i, i + PUT_CHUNK).map((k) => [k, rows[k]])));
       for (const k of keys.slice(i, i + PUT_CHUNK)) delete rows[k];
     }
-    await this.ctx.storage.put({ ...rows, game: { ...g, log: [] }, meta: this.meta, tq: this.tq });
+    if (keys.length) await this.ctx.storage.put(rows);
+    await this.persistState();
     this.savedLog = g.log.length;
   }
 
@@ -194,9 +232,7 @@ export class LudoRoom extends DurableObject<Env> {
       fault: ev.fault ?? "none",
     });
     if (this.tq.length === 1) this.tqSince = Date.now();
-    // Kept in this room's own storage until sent, so a room paused between moves loses nothing. The write lands on the
-    // room (which scales out with rooms), not on the shared ledger.
-    void this.ctx.storage.put("tq", this.tq);
+    // Buffered in memory; it is stored with the next state write (no extra row per event). See keepTelemetry().
     if (this.tq.length >= FLUSH_EVENTS || Date.now() - this.tqSince >= FLUSH_AGE_MS) this.flush();
   }
 
@@ -208,7 +244,7 @@ export class LudoRoom extends DurableObject<Env> {
     if (!this.tq.length || !this.env.LEDGER) return;
     const batch = this.tq.splice(0);
     this.tqSince = 0;
-    void this.ctx.storage.put("tq", this.tq);
+    void this.persistState().catch(() => undefined); // one row per batch, so a reload never re-sends it
     const stub = this.env.LEDGER.get(this.env.LEDGER.idFromName("sli"));
     this.ctx.waitUntil(
       Promise.resolve(stub.addBatch(batch)).catch((e) => {
@@ -219,8 +255,67 @@ export class LudoRoom extends DurableObject<Env> {
     );
   }
 
-  /** Upgrade from the site Worker, already validated there (origin, room name, key). */
+  // ── Capacity guard ────────────────────────────────────────────────────────────────
+  // When Cloudflare refuses storage because the Free plan's daily allowance is used up, players get a plain message
+  // with the reset time instead of a dead socket, and the room stops (no alarm). It is never recorded as a failure:
+  // capacity is a budget, not a fault, and nothing here feeds the incident desk.
+
   async fetch(request: Request): Promise<Response> {
+    try {
+      return await this.handleFetch(request);
+    } catch (e) {
+      if (!isCapacity(e)) throw e;
+      return restingSocket();
+    }
+  }
+
+  async webSocketMessage(ws: WebSocket, raw: string | ArrayBuffer): Promise<void> {
+    try {
+      await this.handleMessage(ws, raw);
+      this.keepTelemetry();
+    } catch (e) {
+      if (!isCapacity(e)) throw e;
+      this.rest();
+    }
+  }
+
+  async alarm(): Promise<void> {
+    try {
+      await this.handleAlarm();
+      this.keepTelemetry();
+    } catch (e) {
+      if (!isCapacity(e)) throw e;
+      this.rest();
+    }
+  }
+
+  /** Tell everyone in the room why play stopped and when it can resume, then close their sockets. */
+  private rest(): void {
+    const msg = JSON.stringify({ t: "resting", resetAt: nextReset() });
+    for (const ws of this.ctx.getWebSockets()) {
+      try {
+        ws.send(msg);
+        ws.close(1013, "capacity");
+      } catch {
+        // Already gone.
+      }
+    }
+    console.log(JSON.stringify({ v: 1, ts: new Date().toISOString(), op: "ludo_capacity", detail: "free-tier allowance used up; room resting" }));
+  }
+
+  /**
+   * Telemetry rides on the next state write. When the room is about to wait on a person (who may think long enough
+   * for the room to be paused), store it now: one row, only at those moments, instead of one row per event.
+   */
+  private keepTelemetry(): void {
+    const g = this.game;
+    if (!this.tq.length || !g) return;
+    const waitingOnPerson = g.phase === "lobby" || g.phase === "over" || g.seats[g.turn] === "human";
+    if (waitingOnPerson) void this.persistState().catch(() => undefined);
+  }
+
+  /** Upgrade from the site Worker, already validated there (origin, room name, key). */
+  private async handleFetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
     const room = url.searchParams.get("room") ?? "";
     const key = url.searchParams.get("key") ?? "";
@@ -259,8 +354,8 @@ export class LudoRoom extends DurableObject<Env> {
     } else if (!m.ended && g.phase !== "over") {
       m.promptAt = now; // a returning player gets a fresh clock
     }
-    await this.save();
     await this.schedule();
+    await this.save();
     this.broadcast();
     if (m.mode === "code") this.send(server, { t: "chat", lines: m.chat ?? [], replace: true }); // history for a (re)joining player
     return new Response(null, { status: 101, webSocket: client });
@@ -285,7 +380,7 @@ export class LudoRoom extends DurableObject<Env> {
     }
   }
 
-  async webSocketMessage(ws: WebSocket, raw: string | ArrayBuffer): Promise<void> {
+  private async handleMessage(ws: WebSocket, raw: string | ArrayBuffer): Promise<void> {
     const t0 = Date.now();
     const att = ws.deserializeAttachment() as Attachment;
     if (t0 - att.windowStart > RATE_WINDOW_MS) {
@@ -318,7 +413,7 @@ export class LudoRoom extends DurableObject<Env> {
       const line: ChatLine = { id: seq, seat: att.seat, name: m.names?.[att.seat] ?? ["Red", "Green", "Yellow", "Blue"][att.seat]!, text: msg.text, at: t0 };
       m.chatSeq = seq;
       m.chat = [...(m.chat ?? []), line].slice(-CHAT_KEEP);
-      await this.ctx.storage.put("meta", m);
+      await this.persistState();
       // Chat is content people wrote: it goes to the room and its storage only, never to telemetry or logs.
       for (const s of this.ctx.getWebSockets()) this.send(s, { t: "chat", lines: [line] });
       return;
@@ -329,7 +424,7 @@ export class LudoRoom extends DurableObject<Env> {
       const names = this.meta.names ?? [null, null, null, null];
       names[att.seat] = msg.name;
       this.meta.names = names;
-      await this.ctx.storage.put("meta", this.meta);
+      await this.persistState();
       this.broadcast();
       return;
     }
@@ -376,8 +471,8 @@ export class LudoRoom extends DurableObject<Env> {
     }
 
     if (activeFault(this.env) === "ludo_slow") await new Promise((r) => setTimeout(r, 400));
-    await this.save();
     await this.schedule();
+    await this.save();
     this.broadcast();
     const ms = Date.now() - t0;
     this.rec({
@@ -408,8 +503,8 @@ export class LudoRoom extends DurableObject<Env> {
         m.keys[seat] = null;
         if (m.names) m.names[seat] = null;
         if (playing && g.turn === seat) m.promptAt = Date.now();
-        await this.save();
         await this.schedule();
+        await this.save();
         this.broadcast();
       }
     }
@@ -464,11 +559,10 @@ export class LudoRoom extends DurableObject<Env> {
     }
     const due = g.seats[g.turn] === "bot" ? Date.now() + BOT_STEP_MS : (m.promptAt ?? m.turnStartedAt) + HUMAN_PROMPT_MS;
     m.due = due;
-    await this.ctx.storage.put("meta", m);
     await this.ctx.storage.setAlarm(due);
   }
 
-  async alarm(): Promise<void> {
+  private async handleAlarm(): Promise<void> {
     const t0 = Date.now();
     await this.load();
     if (this.tq.length && t0 - this.tqSince >= FLUSH_AGE_MS) this.flush();
@@ -491,8 +585,8 @@ export class LudoRoom extends DurableObject<Env> {
       action = g.phase === "roll" ? { seat: g.turn, kind: "roll" } : { seat: g.turn, kind: "move", token: bestMove(g) };
       this.game = this.step(g, action);
     }
-    await this.save();
     await this.schedule();
+    await this.save();
     this.broadcast();
     const ms = Date.now() - t0 + lag;
     if (isBot) {
@@ -504,7 +598,19 @@ export class LudoRoom extends DurableObject<Env> {
   }
 
   async webSocketClose(ws: WebSocket): Promise<void> {
-    ws.close();
+    try {
+      await this.handleClose(ws);
+    } catch (e) {
+      if (!isCapacity(e)) throw e;
+    }
+  }
+
+  private async handleClose(ws: WebSocket): Promise<void> {
+    try {
+      ws.close();
+    } catch {
+      // Already closed.
+    }
     await this.load();
     const g = this.game;
     const m = this.meta;

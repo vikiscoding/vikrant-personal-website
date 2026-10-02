@@ -6,7 +6,7 @@ export type Mode = "solo" | "code" | "unknown";
 
 /** The allowed detail keys for each op. Adding a key is a schema change: update the doc first. */
 export interface LudoDetail {
-  ludo_connect: { mode: Mode; result: "open" | "full" | "busy" | "rejected" | "error"; reason?: string };
+  ludo_connect: { mode: Mode; result: "open" | "full" | "busy" | "rejected" | "error" | "capacity"; reason?: string };
   ludo_action: { mode: Mode; actor: "human" | "bot"; kind: "roll" | "move" | "start"; lag?: number };
   ludo_rtt: { mode: Mode };
   ludo_turn: { mode: Mode; result: "acted" | "timeout"; kind: "roll" | "move" | "start" };

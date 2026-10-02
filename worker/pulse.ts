@@ -1,5 +1,7 @@
 // Read side of the heartbeat. Every page view and every probe reads the snapshot.
 // Page views degrade open (ADR-010): if KV fails, the static page still serves.
+import { isCapacity, nextReset, untilText } from "./capacity";
+import { localStamp } from "./time";
 import type { Env } from "./env";
 import { activeFault } from "./faults";
 import { DepError, record } from "./log";
@@ -110,9 +112,20 @@ async function dashboardHtml(env: Env): Promise<string | null> {
     const [pulse, feed, desk] = await Promise.all([readPulse(env).catch(() => null), readFeed(env), readDeskState(env)]);
     return renderDashboard(win, pulse, feed, desk);
   } catch (e) {
+    if (isCapacity(e)) return capacityCard();
     console.error(JSON.stringify({ v: 1, ts: new Date().toISOString(), op: "dashboard", outcome: "error", detail: e instanceof Error ? e.message : "render failed" }));
     return unavailable();
   }
+}
+
+/** The records are fine, but today's free-tier allowance is used up: say exactly that, and when it comes back. */
+function capacityCard(): string {
+  const at = nextReset();
+  return `<div class="dash"><section class="dash-card" data-state="warn">
+    <h2>Live numbers are paused until the daily allowance resets</h2>
+    <p>Nothing is broken. This dashboard reads from storage on Cloudflare's free tier, and today's free allowance of database writes is used up. It resets at <strong>00:00 UTC (${localStamp(new Date(at).toISOString()).slice(11)})</strong>, in about ${untilText(at)}, and the numbers come back on their own.</p>
+    <p class="dash-small dash-muted">The site and the outside monitor that checks it every 5 minutes are unaffected, and running out of allowance never raises an incident. Readings missed meanwhile will show as a gap in the first 30-day window. The live heartbeat is still here: <a href="/api/pulse">/api/pulse</a>.</p>
+  </section></div>`;
 }
 
 /** The dashboard is switched on but its records cannot be read right now: say so plainly (degrade open, ADR-010). */

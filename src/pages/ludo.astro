@@ -42,6 +42,23 @@ import Base from "../layouts/Base.astro";
       <p class="hint">Friends get a link; up to four people play, and empty seats can be filled with bots.</p>
     </div>
 
+    <!-- Resting: Cloudflare's free-tier allowance is used up for the day (worker/capacity.ts). -->
+    <div class="screen resting" data-view="resting" role="status">
+      <p class="rest-emoji" aria-hidden="true">😴💸</p>
+      <h2>Ludo is napping</h2>
+      <p class="rest-lead">It's not you, and it's not the server. It's my wallet.</p>
+      <p>
+        This game runs on Cloudflare's free tier, and today's free allowance of database writes is all used up. The code
+        is fine; the budget is the bottleneck. (Engineers call this "a cost-optimised architecture".)
+      </p>
+      <p class="rest-time">Back at <strong data-reset-local>midnight UTC</strong> your time, <span data-reset-in>later today</span>.</p>
+      <div class="rest-actions">
+        <a class="go" href="/play/#pulse-run">Play Pulse run meanwhile →</a>
+        <button type="button" data-rest-back>Back</button>
+      </div>
+      <p class="hint">Pulse run plays entirely in your browser, so it works even while Ludo naps.</p>
+    </div>
+
     <!-- Lobby -->
     <div class="screen lobby" data-view="lobby">
       <h2>Waiting for players</h2>
@@ -163,7 +180,8 @@ import Base from "../layouts/Base.astro";
   .screen { display: none; padding: 1.25rem; }
   .app[data-screen="setup"] .setup,
   .app[data-screen="lobby"] .lobby,
-  .app[data-screen="game"] .game { display: grid; }
+  .app[data-screen="game"] .game,
+  .app[data-screen="resting"] .resting { display: grid; }
 
   button { font: inherit; padding: 0.55rem 1rem; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); cursor: pointer; min-height: 2.75rem; }
   button:disabled { cursor: default; opacity: 0.5; }
@@ -180,6 +198,16 @@ import Base from "../layouts/Base.astro";
   .join { display: flex; gap: 0.5rem; }
   .join input { flex: 1; min-width: 0; text-transform: uppercase; letter-spacing: 0.08em; }
   .hint { color: var(--muted); font-size: 0.8125rem; margin: 0; }
+
+  /* Resting */
+  .resting { gap: 0.6rem; max-width: 30rem; margin: 0 auto; text-align: center; justify-items: center; }
+  .resting h2 { margin: 0; font-size: 1.4rem; }
+  .resting p { margin: 0; }
+  .rest-emoji { font-size: 2.6rem; line-height: 1; }
+  .rest-lead { font-weight: 650; font-size: 1.05rem; }
+  .rest-time { padding: 0.5rem 0.8rem; border-radius: 8px; background: var(--surface, #f3f2ee); border: 1px solid var(--line); }
+  .rest-actions { display: flex; gap: 0.6rem; flex-wrap: wrap; justify-content: center; align-items: center; margin-top: 0.4rem; }
+  .rest-actions .go { padding: 0.6rem 1rem; border-radius: 8px; background: var(--accent); color: var(--bg); font-weight: 650; text-decoration: none; }
 
   /* Lobby */
   .lobby { gap: 0.9rem; max-width: 30rem; margin: 0 auto; }
@@ -390,6 +418,8 @@ import Base from "../layouts/Base.astro";
   const othersEl = $<HTMLElement>("[data-others]");
   const netEl = $<HTMLElement>("[data-net]");
   const leaveBtn = $<HTMLButtonElement>("[data-leave]");
+  const resetLocalEl = $<HTMLElement>("[data-reset-local]");
+  const resetInEl = $<HTMLElement>("[data-reset-in]");
   const placesEl = $<HTMLOListElement>("[data-places]");
   const doneEl = $<HTMLElement>("[data-done]");
   const doneText = $<HTMLElement>("[data-done-text]");
@@ -825,7 +855,7 @@ import Base from "../layouts/Base.astro";
   }
 
   // ── Screens ──────────────────────────────────────────────────────────────────────
-  function setScreen(s: "setup" | "lobby" | "game"): void {
+  function setScreen(s: "setup" | "lobby" | "game" | "resting"): void {
     if (app.dataset.screen === s) return;
     app.dataset.screen = s;
     placeChat();
@@ -1012,6 +1042,32 @@ import Base from "../layouts/Base.astro";
   let retries = 0;
   let pingTimer: number | undefined;
   let leaving = false;
+  /** Set when the server says the free-tier allowance is used up: no reconnect attempts until the reset. */
+  let restingUntil = 0;
+  let restTimer: number | undefined;
+
+  function showResting(resetAt: number): void {
+    restingUntil = resetAt;
+    leaving = true;
+    window.clearInterval(pingTimer);
+    view = null;
+    room = "";
+    leaveBtn.hidden = true;
+    inviteBtn.hidden = true;
+    titleEl.textContent = "Ludo · napping";
+    setSheet(false);
+    setScreen("resting");
+    placeChat();
+    const tick = () => {
+      const left = Math.max(0, resetAt - Date.now());
+      resetLocalEl.textContent = new Date(resetAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+      const mins = Math.ceil(left / 60_000);
+      resetInEl.textContent = left > 0 ? `in ${mins >= 60 ? `${Math.floor(mins / 60)} h ${mins % 60} min` : `${mins} min`}` : "now: try again";
+    };
+    tick();
+    window.clearInterval(restTimer);
+    restTimer = window.setInterval(tick, 30_000);
+  }
 
   const hex = (n: number) => Array.from(crypto.getRandomValues(new Uint8Array(n)), (b) => b.toString(16).padStart(2, "0")).join("");
   const cleanName = () => nameInput.value.replace(/\s+/g, " ").trim();
@@ -1040,6 +1096,8 @@ import Base from "../layouts/Base.astro";
   }
 
   function connect(r: string): void {
+    // Still resting: don't spend a connection (or the allowance) finding out again.
+    if (Date.now() < restingUntil) return showResting(restingUntil);
     leaving = false;
     room = r;
     prev = null;
@@ -1106,6 +1164,8 @@ import Base from "../layouts/Base.astro";
         }
         prev = before;
         render();
+      } else if (m.t === "resting") {
+        showResting(Number(m.resetAt));
       } else if (m.t === "chat") {
         onChat(m.lines as ChatLine[], m.replace === true);
       } else if (m.t === "err") {
@@ -1124,7 +1184,7 @@ import Base from "../layouts/Base.astro";
     };
     ws.onclose = (e) => {
       window.clearInterval(pingTimer);
-      if (leaving) return;
+      if (leaving || e.code === 1013) return; // left on purpose, or resting until the daily reset
       if (e.code === 1008 || retries >= 3) {
         statusEl.textContent = "Disconnected. Reload to rejoin.";
         return;
@@ -1214,6 +1274,11 @@ import Base from "../layouts/Base.astro";
   });
   startBtn.addEventListener("click", () => send({ t: "start" }, true));
   leaveBtn.addEventListener("click", leaveGame);
+  $<HTMLButtonElement>("[data-rest-back]").addEventListener("click", () => {
+    window.clearInterval(restTimer);
+    titleEl.textContent = "Ludo";
+    setScreen("setup");
+  });
   $<HTMLButtonElement>("[data-leave-over]").addEventListener("click", leaveGame);
   $<HTMLButtonElement>("[data-leave-done]").addEventListener("click", leaveGame);
   $<HTMLButtonElement>("[data-watch]").addEventListener("click", () => {

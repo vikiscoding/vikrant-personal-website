@@ -1,4 +1,5 @@
 // GET /api/slo?days=30: the ledger's window plus SLO math. Read by the dashboard (and, once built, the daily Git export).
+import { isCapacity, nextReset } from "./capacity";
 import type { Env } from "./env";
 import type { DayRow, EventRow, GameSummary, LedgerSource } from "./ledger";
 
@@ -67,6 +68,10 @@ export async function sloApi(env: Env, url: URL): Promise<Response> {
     if (!body) return new Response(JSON.stringify({ error: "ledger_disabled" }), { status: 503, headers });
     return new Response(JSON.stringify(body), { headers });
   } catch (e) {
+    if (isCapacity(e)) {
+      const resets = new Date(nextReset()).toISOString();
+      return new Response(JSON.stringify({ error: "capacity", detail: "Cloudflare free-tier daily allowance used up", resets_at: resets }), { status: 503, headers: { ...headers, "retry-after": String(Math.ceil((nextReset() - Date.now()) / 1000)) } });
+    }
     console.error(JSON.stringify({ v: 1, ts: new Date().toISOString(), op: "slo_api", outcome: "error", detail: e instanceof Error ? e.message : "read failed" }));
     return new Response(JSON.stringify({ error: "ledger_unavailable" }), { status: 503, headers });
   }

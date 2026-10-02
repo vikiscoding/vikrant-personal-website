@@ -2,6 +2,8 @@
 // formats, and nothing personal stored (the key is a random per-tab seat token, not an identity).
 import type { Env } from "../env";
 import { record } from "../log";
+import { isCapacity } from "../capacity";
+import { restingSocket } from "./room";
 import { detail } from "./telemetry";
 
 const ROOM = /^(s-[a-f0-9]{16}|c-[A-Z0-9]{4,6})$/;
@@ -28,6 +30,11 @@ export async function ludoApi(request: Request, env: Env, ctx: ExecutionContext)
     record(env, { op: "ludo_connect", outcome, status: res.status, ms: Date.now() - started, detail: detail({ mode: room.startsWith("s-") ? "solo" : "code", result }) }, ctx);
     return res;
   } catch (e) {
+    if (isCapacity(e)) {
+      // A budget limit, not a fault: logged as "capacity", never an error, and the player is told why and until when.
+      record(env, { op: "ludo_connect", outcome: "degraded", status: 503, ms: Date.now() - started, detail: detail({ mode: room.startsWith("s-") ? "solo" : "code", result: "capacity" }) });
+      return restingSocket();
+    }
     record(env, { op: "ludo_connect", outcome: "error", status: 500, ms: Date.now() - started, detail: detail({ mode: room.startsWith("s-") ? "solo" : "code", result: "error", reason: e instanceof Error ? e.name : "connect" }) }, ctx);
     return new Response("room unavailable", { status: 503 });
   }

@@ -87,8 +87,9 @@ Each room is its own Durable Object and shares nothing with other rooms, so room
 | --- | --- | --- |
 | Telemetry to the shared SLI ledger | One ledger call per event (about two per move) | One call per room batch (25 events or 20 s, and at game end or when the room empties); the ledger merges a batch into one upsert per signal per day (`SliLedger.addBatch`) |
 | Move log | The whole log rewritten on every move (up to about 50 KB) | Appended as one small row per move (`log:000123`); the game record is stored without it |
+| Rows written per move | About 6 (game, settings, telemetry buffer, log row, plus a buffer write per event) | About 2: ONE `state` record (game without its log, settings, unsent telemetry) + one log row; the buffer is stored separately only when the room is about to wait on a person |
 
-Batches wait in the room's own storage until sent, so a room paused between moves loses nothing; a failed send is retried with the next batch. Workers Logs still get every event as it happens.
+Unsent telemetry rides in the room's `state` record, and is stored on its own only when the room is about to wait on a person (who may think long enough for the room to be paused); a failed send is retried with the next batch. Workers Logs still get every event as it happens. Checked on a local Worker: every logged event reached the ledger.
 
 Load test on the dev Worker (40 four-player rooms, 160 sockets, 60 s, scripted players acting as fast as the game allows):
 
@@ -101,6 +102,15 @@ Load test on the dev Worker (40 four-player rooms, 160 sockets, 60 s, scripted p
 | Every action in the ledger | yes | yes |
 
 Not tested on purpose: the load at which a single room or the ledger saturates. The account is on Cloudflare's Free plan, whose daily Durable Object limit is shared with production, so a test of a few hundred rooms could take the live site's ledger, counter and Ludo down until the daily reset. Run it only on a paid plan, as a game day. Every deploy restarts Durable Objects and drops live sockets; the page reconnects and the game resumes from storage.
+
+## When the free-tier allowance runs out
+
+The account is on Cloudflare's Workers Free plan: Durable Objects get 100,000 rows written, 5 million rows read and 100,000 requests a day, shared by every Worker on the account (production and dev), reset at 00:00 UTC. When one is used up, storage calls fail with "Exceeded allowed rows written in Durable Objects free tier" (it happened on 2 Oct 2026, after two load tests on dev).
+
+- **Ludo** answers with a "Ludo is napping" screen: it says plainly that the budget, not the server, is the limit, and shows the reset in the player's own time with a countdown. The socket closes with code 1013 and the page does not retry until the reset. Rooms already in play stop the same way, with no alarm left running.
+- **Live reliability** shows "Live numbers are paused until the daily allowance resets" with the reset time; `/api/slo` answers 503 `{"error":"capacity","resets_at":…}` with `Retry-After`.
+- **Never an incident.** The scheduled job, the heartbeat (`/api/pulse`) and the incident desk use GitHub and KV only; telemetry writes to the ledger run in the background and swallow errors. Verified during the 2 Oct outage: the heartbeat stayed fresh and no incident opened. A refused Ludo connection is logged as `result=capacity`, `degraded`, never as an error.
+- Helpers: `worker/capacity.ts` (`isCapacity`, `nextReset`).
 
 ## Game rules worth knowing
 
