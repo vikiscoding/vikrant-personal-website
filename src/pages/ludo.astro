@@ -21,6 +21,7 @@ import Base from "../layouts/Base.astro";
         <span aria-hidden="true">💬</span><span class="unread" data-unread hidden>0</span>
       </button>
       <button type="button" class="bar-btn" data-invite hidden>Invite</button>
+      <button type="button" class="bar-btn leave" data-leave hidden title="Leave this game">Leave</button>
       <button type="button" class="bar-btn" data-fs aria-pressed="false" title="Full screen">
         <span data-fs-icon aria-hidden="true">⛶</span><span class="fs-label" data-fs-label>Full screen</span>
       </button>
@@ -61,9 +62,18 @@ import Base from "../layouts/Base.astro";
         <p class="toast" data-toast role="status" aria-live="polite"></p>
         <div class="over" data-over hidden>
           <p class="winner" data-winner></p>
+          <ol class="places" data-places></ol>
           <div class="over-actions">
             <button type="button" class="primary" data-rematch>Rematch</button>
             <button type="button" data-newsolo>New solo game</button>
+            <button type="button" data-leave-over>Leave</button>
+          </div>
+        </div>
+        <div class="done" data-done hidden role="status">
+          <p class="done-text" data-done-text></p>
+          <div class="over-actions">
+            <button type="button" class="primary" data-watch>Keep watching</button>
+            <button type="button" data-leave-done>Leave game</button>
           </div>
         </div>
       </div>
@@ -198,6 +208,16 @@ import Base from "../layouts/Base.astro";
   }
   .over[hidden] { display: none; }
   .winner { font-size: 1.6rem; font-weight: 750; margin: 0; }
+  .places { margin: 0 auto; padding: 0; list-style: none; display: grid; gap: 0.2rem; font-size: 0.9375rem; text-align: left; }
+  :global(.places li) { display: flex; gap: 0.5rem; align-items: center; }
+  :global(.places i) { width: 0.8rem; height: 0.8rem; border-radius: 50%; display: inline-block; }
+  :global(.places b) { min-width: 2.2rem; }
+  /* A player who has finished while others play on: a banner over the lower board, not a full cover. */
+  .done { position: absolute; left: 50%; bottom: 0.75rem; transform: translateX(-50%); width: min(92%, 26rem); display: grid; gap: 0.6rem; text-align: center;
+    padding: 0.8rem; border-radius: 12px; background: rgba(20, 20, 19, 0.9); color: #fff; }
+  .done[hidden] { display: none; }
+  .done-text { margin: 0; font-weight: 650; }
+  .bar-btn.leave { color: #d64545; border-color: color-mix(in srgb, #d64545 45%, var(--line)); }
   .over-actions { display: flex; gap: 0.6rem; justify-content: center; flex-wrap: wrap; }
 
   /* min-width: 0 lets long names and chat wrap inside the column instead of widening (and clipping) it. */
@@ -281,6 +301,10 @@ import Base from "../layouts/Base.astro";
     .screen { padding: 0.75rem; }
     .game { grid-template-columns: 1fr; gap: 0.75rem; }
     .fs-label { display: none; }
+    /* Four buttons share the bar on a phone: drop the decorative dots and tighten so the room name stays readable. */
+    .lights { display: none; }
+    .bar { gap: 0.35rem; padding: 0 0.4rem 0 0.7rem; }
+    .bar-btn { padding: 0.3rem 0.55rem; }
     .tickers { grid-template-columns: 1fr 1fr; }
   }
 
@@ -328,6 +352,7 @@ import Base from "../layouts/Base.astro";
     die: number | null;
     legal: number[];
     winner: number | null;
+    finished: number[];
     rolls: number[][];
     names: (string | null)[];
     lastRoller: number | null;
@@ -364,6 +389,10 @@ import Base from "../layouts/Base.astro";
   const mineEl = $<HTMLElement>("[data-mine]");
   const othersEl = $<HTMLElement>("[data-others]");
   const netEl = $<HTMLElement>("[data-net]");
+  const leaveBtn = $<HTMLButtonElement>("[data-leave]");
+  const placesEl = $<HTMLOListElement>("[data-places]");
+  const doneEl = $<HTMLElement>("[data-done]");
+  const doneText = $<HTMLElement>("[data-done-text]");
   const chatEl = $<HTMLElement>("[data-chat]");
   const msgsEl = $<HTMLOListElement>("[data-msgs]");
   const sayForm = $<HTMLFormElement>("[data-say]");
@@ -438,6 +467,9 @@ import Base from "../layouts/Base.astro";
   let view: View | null = null;
   let prev: View | null = null;
   let you = -1;
+  const ordinal = (n: number) => `${n}${n === 1 ? "st" : n === 2 ? "nd" : n === 3 ? "rd" : "th"}`;
+  /** The player finished and chose to keep watching: hide the banner until the game ends or a new one starts. */
+  let watching = false;
   const nameOf = (s: number) => view?.names?.[s] || NAMES[s]!;
   const whoLabel = (s: number) => (s === you ? "You" : `${nameOf(s)}${view?.seats[s] === "bot" ? " (bot)" : ""}`);
 
@@ -764,6 +796,11 @@ import Base from "../layouts/Base.astro";
         }
       }),
     );
+    const newly = (after.finished ?? []).filter((s) => !(before.finished ?? []).includes(s));
+    for (const s of newly) {
+      const place = ordinal((after.finished ?? []).indexOf(s) + 1);
+      if (after.phase !== "over") toast(s === you ? `You finished ${place}!` : `${nameOf(s)} finished ${place}`);
+    }
   }
 
   // ── Rolls ticker ─────────────────────────────────────────────────────────────────
@@ -840,12 +877,23 @@ import Base from "../layouts/Base.astro";
     const myName = v.names?.[you];
     youEl.innerHTML = `<i style="background:${COLORS[you]}"></i>${myName ? `${esc(myName)} · ` : ""}${NAMES[you]}, base bottom-left`;
 
+    const myPlace = (v.finished ?? []).indexOf(you);
     if (v.phase === "over") {
-      statusEl.textContent = v.winner === you ? "You win!" : `${nameOf(v.winner ?? 0)} wins.`;
-      winnerEl.textContent = v.winner === you ? "You win! 🎉" : `${nameOf(v.winner ?? 0)} wins`;
+      statusEl.textContent = myPlace === 0 ? "You win!" : `${nameOf(v.winner ?? 0)} wins. You finished ${ordinal(myPlace + 1)}.`;
+      winnerEl.textContent = myPlace === 0 ? "You win! 🎉" : `${nameOf(v.winner ?? 0)} wins`;
+      placesEl.innerHTML = (v.finished ?? [])
+        .map((s, i) => `<li><b>${ordinal(i + 1)}</b><i style="background:${COLORS[s]}"></i><bdi>${esc(nameOf(s))}</bdi>${s === you ? " (you)" : v.seats[s] === "bot" ? " (bot)" : ""}</li>`)
+        .join("");
       overEl.hidden = false;
+      doneEl.hidden = true;
+    } else if (myPlace >= 0) {
+      overEl.hidden = true;
+      doneText.textContent = `You finished ${ordinal(myPlace + 1)}! The others are still playing.`;
+      doneEl.hidden = watching;
+      statusEl.textContent = `You finished ${ordinal(myPlace + 1)}. ${whoLabel(v.turn)} ${v.phase === "roll" ? "to roll" : "to move"}…`;
     } else {
       overEl.hidden = true;
+      doneEl.hidden = true;
       statusEl.textContent = mine
         ? v.phase === "roll"
           ? "Your turn: roll the die."
@@ -998,6 +1046,9 @@ import Base from "../layouts/Base.astro";
     view = null;
     anims.clear();
     overEl.hidden = true;
+    doneEl.hidden = true;
+    watching = false;
+    leaveBtn.hidden = false;
     chatLines.length = 0;
     setUnread(0);
     renderChat();
@@ -1090,6 +1141,35 @@ import Base from "../layouts/Base.astro";
     ws?.close();
   }
 
+  /**
+   * Leave on purpose, at any time. The server frees the seat (a bot takes it in a friends' game) and, when nobody is
+   * left, stops the room entirely, so nothing keeps running for a game no one is watching.
+   */
+  function leaveGame(): void {
+    const v = view;
+    const playing = v && (v.phase === "roll" || v.phase === "move") && !(v.finished ?? []).includes(you);
+    if (playing && !window.confirm(isCodeRoom() ? "Leave this game? A bot takes your seat and the others play on." : "End this game?")) return;
+    send({ t: "leave" });
+    leave();
+    view = null;
+    prev = null;
+    room = "";
+    chatLines.length = 0;
+    setSheet(false);
+    titleEl.textContent = "Ludo";
+    inviteBtn.hidden = true;
+    leaveBtn.hidden = true;
+    overEl.hidden = true;
+    doneEl.hidden = true;
+    setScreen("setup");
+    placeChat();
+    try {
+      history.replaceState(history.state, "", "/ludo/");
+    } catch {
+      // Updating the address bar is a convenience only.
+    }
+  }
+
   // ── Actions ──────────────────────────────────────────────────────────────────────
   function roll(): void {
     if (!view || view.turn !== you || view.phase !== "roll") return;
@@ -1133,7 +1213,17 @@ import Base from "../layouts/Base.astro";
     connect(`c-${code}`);
   });
   startBtn.addEventListener("click", () => send({ t: "start" }, true));
-  $<HTMLButtonElement>("[data-rematch]").addEventListener("click", () => send({ t: "rematch" }, true));
+  leaveBtn.addEventListener("click", leaveGame);
+  $<HTMLButtonElement>("[data-leave-over]").addEventListener("click", leaveGame);
+  $<HTMLButtonElement>("[data-leave-done]").addEventListener("click", leaveGame);
+  $<HTMLButtonElement>("[data-watch]").addEventListener("click", () => {
+    watching = true;
+    doneEl.hidden = true;
+  });
+  $<HTMLButtonElement>("[data-rematch]").addEventListener("click", () => {
+    watching = false;
+    send({ t: "rematch" }, true);
+  });
   $<HTMLButtonElement>("[data-newsolo]").addEventListener("click", () => {
     leave();
     connect(`s-${hex(8)}`);

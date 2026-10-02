@@ -192,6 +192,50 @@ export class SliLedger extends DurableObject<Env> {
     }
   }
 
+  /**
+   * Many events in one call (worker/ludo/room.ts flushes a room's telemetry this way). The counts, histogram, slow-good
+   * rule and detail cap are exactly those of `add`; the difference is cost: one upsert per (day, source) in the batch
+   * instead of one per event, so ledger load grows with rooms, not with moves.
+   */
+  addBatch(entries: LedgerEntry[]): void {
+    type Group = { day: string; source: ServerSource; total: number; good: number; slow: number; max: number; hist: number[]; details: LedgerEntry[] };
+    const groups = new Map<string, Group>();
+    for (const e of entries.slice(0, 5_000)) {
+      if (!(e.source in SLOW_GOOD_MS)) continue;
+      const day = localDay(e.ts);
+      const key = `${day}|${e.source}`;
+      const g = groups.get(key) ?? { day, source: e.source, total: 0, good: 0, slow: 0, max: 0, hist: Array<number>(HIST).fill(0), details: [] };
+      const good = e.outcome === "ok";
+      const slow = good && e.ms > SLOW_GOOD_MS[e.source];
+      g.total += 1;
+      g.good += good ? 1 : 0;
+      g.slow += slow ? 1 : 0;
+      g.max = Math.max(g.max, Math.round(e.ms));
+      const b = bucketOf(e.ms, edgesFor(e.source));
+      g.hist[b] = (g.hist[b] ?? 0) + 1;
+      if (!good || slow) g.details.push(e);
+      groups.set(key, g);
+    }
+    const sql = this.ctx.storage.sql;
+    for (const g of groups.values()) {
+      const kept = g.details.length
+        ? sql.exec<{ n: number }>(`SELECT COUNT(*) AS n FROM events WHERE day = ? AND source = ?`, g.day, g.source).one().n
+        : 0;
+      const room = Math.max(0, MAX_EVENTS_PER_DAY - kept);
+      const overflow = Math.max(0, g.details.length - room);
+      sql.exec(
+        `INSERT INTO daily (day, source, total, good, bad, slow_good, overflow, max_ms, ${hcols.join(", ")})
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ${hcols.map(() => "?").join(", ")})
+         ON CONFLICT (day, source) DO UPDATE SET
+           total = total + excluded.total, good = good + excluded.good, bad = bad + excluded.bad,
+           slow_good = slow_good + excluded.slow_good, overflow = overflow + excluded.overflow,
+           max_ms = MAX(max_ms, excluded.max_ms), ${hcols.map((c) => `${c} = ${c} + excluded.${c}`).join(", ")}`,
+        g.day, g.source, g.total, g.good, g.total - g.good, g.slow, overflow, g.max, ...g.hist,
+      );
+      for (const e of g.details.slice(0, room)) this.detail(e, g.day);
+    }
+  }
+
   /** One validated Pulse run event (ADR-015). Never throws on unknown sessions; caps new sessions per day. */
   addGame(e: GameEvent, ts: string, fault: string): void {
     const sql = this.ctx.storage.sql;

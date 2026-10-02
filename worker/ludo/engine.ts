@@ -29,7 +29,11 @@ export interface Game {
   die: number | null;
   /** Token indexes the current seat may move with `die`. */
   legal: number[];
+  /** The first seat to bring every token home. Set at the first finish; the game goes on for the other places. */
   winner: number | null;
+  /** Finishing order, 1st first. Play continues until one seat is left, which takes last place. Optional only so
+   *  games saved before it existed still load. */
+  finished?: number[];
   /** Each seat's last ten dice, oldest first. Optional only so games saved before it existed still load. */
   rolls?: number[][];
   /** Every applied action, in order: the replay record. */
@@ -56,6 +60,7 @@ export function newGame(seed: number, seats: SeatKind[]): Game {
     die: null,
     legal: [],
     winner: null,
+    finished: [],
     rolls: Array.from({ length: SEATS }, () => []),
     log: [],
   };
@@ -76,10 +81,12 @@ export function legalMoves(tokens: readonly number[], die: number): number[] {
   return out;
 }
 
+/** The next seat still playing: empty seats and seats that have finished are skipped. */
 function nextSeat(g: Game, from: number): number {
+  const done = g.finished ?? [];
   for (let k = 1; k <= SEATS; k++) {
     const s = (from + k) % SEATS;
-    if (g.seats[s] !== "empty") return s;
+    if (g.seats[s] !== "empty" && !done.includes(s)) return s;
   }
   return from;
 }
@@ -130,7 +137,15 @@ export function apply(g: Game, a: Action): Game {
 
   const log = [...g.log, a];
   if (mine.every((p) => p === HOME)) {
-    return { ...g, tokens, die: null, legal: [], phase: "over", winner: a.seat, log };
+    // This seat has finished: record its place, and keep playing for the others until only one is left.
+    const finished = [...(g.finished ?? []), a.seat];
+    const winner = finished[0] ?? a.seat;
+    const left = g.seats.map((k, s) => (k !== "empty" && !finished.includes(s) ? s : -1)).filter((s) => s >= 0);
+    if (left.length <= 1) {
+      return { ...g, tokens, die: null, legal: [], phase: "over", winner, finished: [...finished, ...left], log };
+    }
+    const after = { ...g, finished };
+    return { ...g, tokens, die: null, legal: [], phase: "roll", winner, finished, turn: nextSeat(after, a.seat), log };
   }
   const again = die === 6 || captured || to === HOME;
   return { ...g, tokens, die: null, legal: [], phase: "roll", turn: again ? a.seat : nextSeat(g, a.seat), log };

@@ -79,8 +79,35 @@ Names and chat are checked on the server by pure functions in `worker/ludo/text.
 
 Verified: 18 sample messages (Hindi, Tamil, Bengali, Punjabi, Arabic, Hebrew, Persian, Chinese, Japanese, Korean, Thai, Russian, Greek, Vietnamese, Amharic, joined emoji, flags and skin tones, mixed direction) pass unchanged; names in Devanagari, Arabic, Chinese, Thai and Persian are accepted; overrides, control characters, markup and over-long input are rejected or stripped. Live on the dev Worker: two players chatted in four scripts, the rate limit held, they started with two bots, and a rejoining player got the history.
 
+## Scale
+
+Each room is its own Durable Object and shares nothing with other rooms, so rooms scale out side by side. Two shared costs were removed on 2 Oct 2026 (ADR-027):
+
+| Change | Before | After |
+| --- | --- | --- |
+| Telemetry to the shared SLI ledger | One ledger call per event (about two per move) | One call per room batch (25 events or 20 s, and at game end or when the room empties); the ledger merges a batch into one upsert per signal per day (`SliLedger.addBatch`) |
+| Move log | The whole log rewritten on every move (up to about 50 KB) | Appended as one small row per move (`log:000123`); the game record is stored without it |
+
+Batches wait in the room's own storage until sent, so a room paused between moves loses nothing; a failed send is retried with the next batch. Workers Logs still get every event as it happens.
+
+Load test on the dev Worker (40 four-player rooms, 160 sockets, 60 s, scripted players acting as fast as the game allows):
+
+| | Before | After |
+| --- | --- | --- |
+| Actions per second | 194 | 198 |
+| p50 / p95 | 49 / 64 ms | 48 / 60 ms |
+| p99 / max | 240 / 485 ms | 80 / 304 ms |
+| Errors | 0 | 0 |
+| Every action in the ledger | yes | yes |
+
+Not yet tested: the load at which a single room or the ledger saturates; that needs a larger load test (and an account plan that allows it). Every deploy restarts Durable Objects and drops live sockets; the page reconnects and the game resumes from storage.
+
+## Game rules worth knowing
+
+- **Play continues for every place.** A player who brings all four tokens home is recorded 1st, 2nd and so on; finished seats are skipped, and the game ends when one player is left (last place). Each finisher can keep watching or leave; game over shows the full placings.
+- **Leave at any time.** In a friends' room a bot takes a playing seat at once, so the others play on (a lobby seat is simply freed, and the old seat key cannot come back). When the last person leaves, or in a solo game, the room stops: no alarm and no bots playing to an empty room. Telemetry counts a game as completed if anyone finished before everyone left.
+
 ## Telemetry not built yet
 
 - Client-perceived action time (send → board drawn) beaconed back. It is shown to the player now; sending it would be a second spoofable client signal, like Pulse run's.
 - Reconnect count and time-to-rejoin per seat.
-- Storage: the action log is rewritten on every step (≈ 50 KB by game end). Fine at this scale; move to append-only SQL rows if rooms get busy.
