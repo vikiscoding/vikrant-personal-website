@@ -1,0 +1,318 @@
+---
+// Ludo (docs/ludo-telemetry.md): a server-authoritative game whose real job is measuring interaction latency.
+// Solo: you plus three server bots. With a code: four people, or fewer plus bots. Telemetry is server-measured.
+import Base from "../layouts/Base.astro";
+---
+
+<Base title="Ludo · vikrantsingh.fyi" description="Ludo against server bots or with friends on a shared code. Every move is timed by the server.">
+  <h1>Ludo</h1>
+  <p>
+    Play alone against three server bots, or share a code with up to three friends. Every roll and move is decided and
+    timed on the server, so this page measures how long an interaction really takes.
+  </p>
+
+  <div class="controls" data-setup>
+    <button type="button" data-solo>Play solo</button>
+    <span class="or">or</span>
+    <input data-code maxlength="6" placeholder="CODE" aria-label="Room code" autocomplete="off" spellcheck="false" />
+    <button type="button" data-join>Join code</button>
+    <button type="button" data-new>New code</button>
+  </div>
+
+  <div class="table" data-table hidden>
+    <canvas data-board width="600" height="600" aria-label="Ludo board"></canvas>
+    <div class="side">
+      <p class="status" aria-live="polite" data-status>Connecting…</p>
+      <p class="dice" data-dice>–</p>
+      <button type="button" data-roll disabled>Roll</button>
+      <button type="button" data-start hidden>Start now with bots</button>
+      <dl class="latency">
+        <dt>Your last action</dt><dd data-act>–</dd>
+        <dt>Round trip</dt><dd data-rtt>–</dd>
+      </dl>
+      <p class="muted small" data-room></p>
+    </div>
+  </div>
+
+  <p class="note">
+    Sent: your rolls and moves, and a timing ping every 15 seconds. Stored: timings and game outcomes, with no name, IP
+    address or cookie. <a href="/privacy/">Privacy</a>
+  </p>
+  <p class="muted bound">Scope: a latency testbed with Ludo rules, not a product.</p>
+</Base>
+
+<style>
+  .controls { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin: 1.5rem 0; }
+  .controls input { width: 6.5rem; text-transform: uppercase; font: inherit; padding: 0.35rem 0.5rem; }
+  .or { color: var(--muted); }
+  button { font: inherit; padding: 0.4rem 0.9rem; cursor: pointer; }
+  button:disabled { cursor: default; opacity: 0.5; }
+  .table { display: grid; grid-template-columns: minmax(0, 600px) 12rem; gap: 1rem; align-items: start; }
+  canvas { width: 100%; height: auto; border: 1px solid var(--line); border-radius: 6px; cursor: pointer; touch-action: manipulation; }
+  .status { min-height: 3em; margin: 0 0 0.5rem; }
+  .dice { font-size: 2.5rem; font-weight: 700; margin: 0.25rem 0; line-height: 1; }
+  .latency { display: grid; grid-template-columns: auto auto; gap: 0.15rem 0.75rem; font-size: 0.875rem; margin: 1rem 0 0; }
+  .latency dd { margin: 0; font-variant-numeric: tabular-nums; }
+  .small { font-size: 0.8125rem; }
+  .note { font-size: 0.875rem; }
+  @media (max-width: 760px) { .table { grid-template-columns: 1fr; } }
+</style>
+
+<script>
+  type View = {
+    seats: ("human" | "bot" | "empty")[];
+    tokens: number[][];
+    turn: number;
+    phase: "lobby" | "roll" | "move" | "over";
+    die: number | null;
+    legal: number[];
+    winner: number | null;
+    mode: "solo" | "code";
+    turnEndsAt: number | null;
+  };
+
+  const $ = <T extends Element>(s: string) => document.querySelector<T>(s)!;
+  const board = $<HTMLCanvasElement>("[data-board]");
+  const ctx2d = board.getContext("2d")!;
+  const statusEl = $<HTMLElement>("[data-status]");
+  const diceEl = $<HTMLElement>("[data-dice]");
+  const rollBtn = $<HTMLButtonElement>("[data-roll]");
+  const startBtn = $<HTMLButtonElement>("[data-start]");
+  const actEl = $<HTMLElement>("[data-act]");
+  const rttEl = $<HTMLElement>("[data-rtt]");
+  const roomEl = $<HTMLElement>("[data-room]");
+  const codeInput = $<HTMLInputElement>("[data-code]");
+
+  const COLORS = ["#d64545", "#2f9e57", "#e0b100", "#2f6fd6"];
+  const NAMES = ["Red", "Green", "Yellow", "Blue"];
+  const C = 40; // cell size in canvas pixels (15 × 15 grid)
+
+  // The shared 52-square track, starting at Red's entry square, clockwise.
+  const TRACK: [number, number][] = [
+    [1, 6], [2, 6], [3, 6], [4, 6], [5, 6], [6, 5], [6, 4], [6, 3], [6, 2], [6, 1], [6, 0], [7, 0], [8, 0],
+    [8, 1], [8, 2], [8, 3], [8, 4], [8, 5], [9, 6], [10, 6], [11, 6], [12, 6], [13, 6], [14, 6], [14, 7], [14, 8],
+    [13, 8], [12, 8], [11, 8], [10, 8], [9, 8], [8, 9], [8, 10], [8, 11], [8, 12], [8, 13], [8, 14], [7, 14], [6, 14],
+    [6, 13], [6, 12], [6, 11], [6, 10], [6, 9], [5, 8], [4, 8], [3, 8], [2, 8], [1, 8], [0, 8], [0, 7], [0, 6],
+  ];
+  const START = [0, 13, 26, 39];
+  const SAFE = new Set([0, 8, 13, 21, 26, 34, 39, 47]);
+  const HOME_COL: [number, number][][] = [
+    [[1, 7], [2, 7], [3, 7], [4, 7], [5, 7]],
+    [[7, 1], [7, 2], [7, 3], [7, 4], [7, 5]],
+    [[13, 7], [12, 7], [11, 7], [10, 7], [9, 7]],
+    [[7, 13], [7, 12], [7, 11], [7, 10], [7, 9]],
+  ];
+  const YARD_BASE: [number, number][] = [[0, 0], [9, 0], [9, 9], [0, 9]];
+  const YARD_SLOTS: [number, number][] = [[1.5, 1.5], [3.5, 1.5], [1.5, 3.5], [3.5, 3.5]];
+  const FINISH: [number, number][] = [[6.6, 7], [7, 6.6], [7.4, 7], [7, 7.4]];
+
+  function cellOf(seat: number, token: number, p: number): [number, number] {
+    if (p === -1) {
+      const [bx, by] = YARD_BASE[seat]!;
+      const [sx, sy] = YARD_SLOTS[token]!;
+      return [bx + sx, by + sy];
+    }
+    if (p <= 50) {
+      const [x, y] = TRACK[(START[seat]! + p) % 52]!;
+      return [x + 0.5, y + 0.5];
+    }
+    if (p <= 55) {
+      const [x, y] = HOME_COL[seat]![p - 51]!;
+      return [x + 0.5, y + 0.5];
+    }
+    const [x, y] = FINISH[seat]!;
+    return [x + 0.5, y + 0.5];
+  }
+
+  let view: View | null = null;
+  let you = -1;
+
+  function draw(): void {
+    const g = ctx2d;
+    g.fillStyle = "#fbfbf9";
+    g.fillRect(0, 0, 600, 600);
+    YARD_BASE.forEach(([x, y], s) => {
+      g.fillStyle = COLORS[s]!;
+      g.globalAlpha = 0.85;
+      g.fillRect(x * C, y * C, 6 * C, 6 * C);
+      g.globalAlpha = 1;
+      g.fillStyle = "#fff";
+      g.fillRect((x + 1) * C, (y + 1) * C, 4 * C, 4 * C);
+    });
+    TRACK.forEach(([x, y], i) => {
+      const startSeat = START.indexOf(i);
+      g.fillStyle = startSeat >= 0 ? COLORS[startSeat]! : SAFE.has(i) ? "#e8e6df" : "#fff";
+      g.fillRect(x * C, y * C, C, C);
+      g.strokeStyle = "#c9c7bf";
+      g.strokeRect(x * C, y * C, C, C);
+      if (SAFE.has(i) && startSeat < 0) {
+        g.fillStyle = "#9a978c";
+        g.font = "20px system-ui";
+        g.textAlign = "center";
+        g.textBaseline = "middle";
+        g.fillText("★", (x + 0.5) * C, (y + 0.5) * C);
+      }
+    });
+    HOME_COL.forEach((cells, s) =>
+      cells.forEach(([x, y]) => {
+        g.fillStyle = COLORS[s]!;
+        g.fillRect(x * C, y * C, C, C);
+        g.strokeStyle = "#c9c7bf";
+        g.strokeRect(x * C, y * C, C, C);
+      }),
+    );
+    g.fillStyle = "#e8e6df";
+    g.fillRect(6 * C, 6 * C, 3 * C, 3 * C);
+
+    if (!view) return;
+    view.tokens.forEach((list, s) => {
+      if (view!.seats[s] === "empty") return;
+      list.forEach((p, t) => {
+        const [cx, cy] = cellOf(s, t, p);
+        const movable = view!.phase === "move" && view!.turn === s && s === you && view!.legal.includes(t);
+        g.beginPath();
+        g.arc(cx * C, cy * C, movable ? 15 : 13, 0, Math.PI * 2);
+        g.fillStyle = COLORS[s]!;
+        g.fill();
+        g.lineWidth = movable ? 4 : 2;
+        g.strokeStyle = movable ? "#111" : "#fff";
+        g.stroke();
+        g.fillStyle = "#fff";
+        g.font = "bold 13px system-ui";
+        g.textAlign = "center";
+        g.textBaseline = "middle";
+        g.fillText(String(t + 1), cx * C, cy * C);
+      });
+    });
+  }
+
+  function render(): void {
+    draw();
+    if (!view) return;
+    const v = view;
+    diceEl.textContent = v.die === null ? "–" : String(v.die);
+    const mine = v.turn === you;
+    rollBtn.disabled = !(mine && v.phase === "roll");
+    startBtn.hidden = v.phase !== "lobby";
+    const who = (s: number) => `${NAMES[s]}${s === you ? " (you)" : v.seats[s] === "bot" ? " (bot)" : ""}`;
+    if (v.phase === "lobby") {
+      const n = v.seats.filter((k) => k === "human").length;
+      statusEl.textContent = `Waiting for players: ${n} of 4 joined. You are ${NAMES[you]}.`;
+    } else if (v.phase === "over") {
+      statusEl.textContent = `${who(v.winner ?? 0)} wins.`;
+    } else if (mine) {
+      const left = v.turnEndsAt ? Math.max(0, Math.round((v.turnEndsAt - Date.now()) / 1000)) : null;
+      statusEl.textContent = v.phase === "roll" ? `Your turn: roll.${left !== null ? ` ${left}s left.` : ""}` : "Pick a highlighted token.";
+    } else {
+      statusEl.textContent = `${who(v.turn)} to ${v.phase}.`;
+    }
+  }
+
+  let ws: WebSocket | null = null;
+  let room = "";
+  let pendingAt: number | null = null;
+  let retries = 0;
+  let pingTimer: number | undefined;
+
+  const hex = (n: number) => Array.from(crypto.getRandomValues(new Uint8Array(n)), (b) => b.toString(16).padStart(2, "0")).join("");
+
+  function keyFor(r: string): string {
+    const k = `ludo-key:${r}`;
+    try {
+      const have = sessionStorage.getItem(k);
+      if (have) return have;
+      const made = hex(8);
+      sessionStorage.setItem(k, made);
+      return made;
+    } catch {
+      return hex(8);
+    }
+  }
+
+  function send(body: object, timed = false): void {
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    if (timed) pendingAt = performance.now();
+    ws.send(JSON.stringify(body));
+  }
+
+  function connect(r: string): void {
+    room = r;
+    $<HTMLElement>("[data-setup]").hidden = true;
+    $<HTMLElement>("[data-table]").hidden = false;
+    roomEl.textContent = r.startsWith("c-") ? `Code: ${r.slice(2)}. Share it; up to four can join.` : "Solo game against three server bots.";
+    const proto = location.protocol === "https:" ? "wss" : "ws";
+    ws = new WebSocket(`${proto}://${location.host}/api/ludo?room=${encodeURIComponent(r)}&key=${keyFor(r)}`);
+    ws.onopen = () => {
+      retries = 0;
+      send({ t: "ping" });
+      window.clearInterval(pingTimer);
+      pingTimer = window.setInterval(() => send({ t: "ping" }), 15_000);
+    };
+    let pingSent = performance.now();
+    ws.onmessage = (e) => {
+      const m = JSON.parse(String(e.data));
+      if (m.t === "probe") {
+        // Echo at once: the server times the round trip, so the figure is not this browser's claim.
+        send({ t: "echo", s: m.s });
+        rttEl.textContent = `${Math.round(performance.now() - pingSent)} ms`;
+        pingSent = performance.now();
+      } else if (m.t === "state") {
+        you = m.you;
+        view = m.g;
+        if (pendingAt !== null) {
+          actEl.textContent = `${Math.round(performance.now() - pendingAt)} ms`;
+          pendingAt = null;
+        }
+        render();
+      } else if (m.t === "err") {
+        pendingAt = null;
+        statusEl.textContent = `Not allowed: ${String(m.code).replace(/_/g, " ")}.`;
+      }
+    };
+    ws.onclose = (e) => {
+      window.clearInterval(pingTimer);
+      if (e.code === 1008 || retries >= 3) {
+        statusEl.textContent = "Disconnected. Reload to rejoin.";
+        return;
+      }
+      retries += 1;
+      statusEl.textContent = "Reconnecting…";
+      window.setTimeout(() => connect(room), 1000 * 2 ** (retries - 1));
+    };
+  }
+
+  $<HTMLButtonElement>("[data-solo]").addEventListener("click", () => connect(`s-${hex(8)}`));
+  $<HTMLButtonElement>("[data-new]").addEventListener("click", () => {
+    const abc = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    codeInput.value = Array.from(crypto.getRandomValues(new Uint8Array(5)), (b) => abc[b % abc.length]).join("");
+  });
+  $<HTMLButtonElement>("[data-join]").addEventListener("click", () => {
+    const code = codeInput.value.trim().toUpperCase();
+    if (!/^[A-Z0-9]{4,6}$/.test(code)) {
+      codeInput.focus();
+      return;
+    }
+    connect(`c-${code}`);
+  });
+  rollBtn.addEventListener("click", () => send({ t: "roll" }, true));
+  startBtn.addEventListener("click", () => send({ t: "start" }, true));
+  board.addEventListener("click", (e) => {
+    if (!view || view.phase !== "move" || view.turn !== you) return;
+    const rect = board.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * 15;
+    const y = ((e.clientY - rect.top) / rect.height) * 15;
+    let best = -1;
+    let bestD = 0.8;
+    view.legal.forEach((t) => {
+      const [cx, cy] = cellOf(you, t, view!.tokens[you]![t]!);
+      const d = Math.hypot(cx - x, cy - y);
+      if (d < bestD) {
+        bestD = d;
+        best = t;
+      }
+    });
+    if (best >= 0) send({ t: "move", token: best }, true);
+  });
+  window.setInterval(() => view?.turnEndsAt && render(), 1000);
+  draw();
+</script>

@@ -1,11 +1,13 @@
 import type { Env } from "./env";
 import { pulseApi, servePage } from "./pulse";
+import { ludoApi } from "./ludo/route";
 import { rumApi } from "./rum";
 import { sloApi } from "./slo";
 import { runTicker } from "./ticker";
 
 export { VisitCounter } from "./visits";
 export { SliLedger } from "./ledger";
+export { LudoRoom } from "./ludo/room";
 
 export default {
   async fetch(request, env, ctx): Promise<Response> {
@@ -21,6 +23,7 @@ export default {
     if (pathname === "/api/pulse" && request.method === "GET") return pulseApi(env, ctx);
     if (pathname === "/api/slo" && request.method === "GET") return sloApi(env, url);
     if (pathname === "/api/rum") return rumApi(request, env, ctx);
+    if (pathname === "/api/ludo" && request.method === "GET") return ludoApi(request, env, ctx);
     if (pathname.startsWith("/api/")) {
       return new Response(JSON.stringify({ error: "not_found" }), {
         status: 404,

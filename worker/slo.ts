@@ -3,7 +3,14 @@ import type { Env } from "./env";
 import type { DayRow, EventRow, GameSummary, LedgerSource } from "./ledger";
 
 /** Targets from docs/slo.md. "pulse" here is the white-box view of the probe; SLO-1 itself is UptimeRobot's number. */
-export const TARGETS: Partial<Record<LedgerSource, number>> & { ticker: number; pulse: number } = { ticker: 0.98, pulse: 0.99 };
+export const TARGETS: Partial<Record<LedgerSource, number>> & { ticker: number; pulse: number } = {
+  ticker: 0.98,
+  pulse: 0.99,
+  // Ludo, proposed (docs/ludo-telemetry.md). Lobby and game completion are tracked, not objectives.
+  ludo_connect: 0.995,
+  ludo_action: 0.99,
+  ludo_rtt: 0.95,
+};
 
 export interface SourceSummary {
   source: LedgerSource;
@@ -44,7 +51,7 @@ export async function readWindow(env: Env, windowDays: number): Promise<SloWindo
   return {
     generated_at: new Date().toISOString(),
     window_days: windowDays,
-    summary: (["pulse", "ticker", "page"] as const).map((s) => summarize(days, s)),
+    summary: (["pulse", "ticker", "page", "ludo_connect", "ludo_action", "ludo_rtt", "ludo_lobby", "ludo_game"] as const).map((s) => summarize(days, s)),
     days,
     events,
     game,

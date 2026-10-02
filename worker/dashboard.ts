@@ -17,14 +17,26 @@ export function dashboardMode(env: Env): DashboardMode {
 /** Expected events in a full 30-day window, from the schedules (probe every 5 min, ticker every 10 min). */
 const EXPECTED: Record<"pulse" | "ticker", number> = { pulse: 8_640, ticker: 4_320 };
 
+const LUDO_EVENT_LABEL = {
+  ludo_action: "Ludo action",
+  ludo_rtt: "Ludo round trip",
+  ludo_connect: "Ludo connect",
+  ludo_lobby: "Ludo lobby",
+  ludo_game: "Ludo game",
+} as const;
 const LABEL: Record<LedgerSource, string> = {
   pulse: "Heartbeat freshness",
   ticker: "Scheduled job success",
   page: "Page requests",
   frame: "Pulse run frame time",
   game: "Pulse run",
+  ludo_action: "Ludo action",
+  ludo_rtt: "Ludo round trip",
+  ludo_connect: "Ludo connect",
+  ludo_lobby: "Ludo lobby wait",
+  ludo_game: "Ludo game",
 };
-const EVENT_LABEL: Record<LedgerSource, string> = { pulse: "Probe check", ticker: "Scheduled job", page: "Page", frame: "Pulse run frame", game: "Pulse run (browser)" };
+const EVENT_LABEL: Record<LedgerSource, string> = { pulse: "Probe check", ticker: "Scheduled job", page: "Page", frame: "Pulse run frame", game: "Pulse run (browser)", ...LUDO_EVENT_LABEL };
 const EXPLAIN: Record<"pulse" | "ticker", string> = {
   pulse: "Every 5 minutes an outside monitor asks whether this site's status snapshot is less than 35 minutes old.",
   ticker: "Every 10 minutes a job fetches this site's latest commit and build status from GitHub and saves a snapshot.",
@@ -158,7 +170,8 @@ function speed(days: DayRow[], now: number): string {
 }
 
 function failures(events: EventRow[]): string {
-  const server = events.filter((e) => e.source !== "game" && e.source !== "frame");
+  // Ludo has its own SLIs (docs/ludo-telemetry.md); its events stay out of the site's failure list.
+  const server = events.filter((e) => e.source !== "game" && e.source !== "frame" && !e.source.startsWith("ludo_"));
   const shown = server.filter((e) => e.outcome !== "ok").slice(0, 15);
   const slow = server.filter((e) => e.outcome === "ok").length;
   const items = shown

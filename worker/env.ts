@@ -6,6 +6,8 @@ export interface Env {
   VISITS?: DurableObjectNamespace<import("./visits").VisitCounter>;
   /** Our own long-term SLI store (ADR-012). */
   LEDGER?: DurableObjectNamespace<import("./ledger").SliLedger>;
+  /** Ludo rooms, one Durable Object per room (docs/ludo-telemetry.md). Absent = /api/ludo returns 503. */
+  LUDO?: DurableObjectNamespace<import("./ludo/room").LudoRoom>;
   /** Reliability dashboard flag: "off" | "auto" (once 30 days of data) | "on". See worker/dashboard.ts. */
   DASHBOARD_MODE?: string;
   /** Feature flag: "off" | "auto" | "on". See worker/visits.ts. */

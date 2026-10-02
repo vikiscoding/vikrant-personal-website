@@ -8,8 +8,9 @@ import type { SliEvent } from "./log";
 import { addDays, localDay } from "./time";
 
 /** Server sources (ticker, pulse, page), client frame samples (frame) and client game errors (game). */
-export type LedgerSource = "ticker" | "pulse" | "page" | "frame" | "game";
-type ServerSource = "ticker" | "pulse" | "page";
+export type LedgerSource = ServerSource | "frame" | "game";
+type LudoSource = "ludo_action" | "ludo_rtt" | "ludo_connect" | "ludo_lobby" | "ludo_game";
+type ServerSource = "ticker" | "pulse" | "page" | LudoSource;
 
 /** Histogram upper edges (ms); the last bucket is "over the last edge". Same column count for both sets. */
 const SERVER_EDGES = [50, 100, 200, 400, 800, 1600, 3200, 6400] as const;
@@ -17,7 +18,17 @@ const FRAME_EDGES = [8, 16, 25, 33, 50, 100, 250, 1000] as const;
 const edgesFor = (s: string): readonly number[] => (s === "frame" ? FRAME_EDGES : SERVER_EDGES);
 const HIST = SERVER_EDGES.length + 1;
 /** A good event slower than this is kept in full as an early warning ("slow good"): half the latency budget. */
-const SLOW_GOOD_MS: Record<ServerSource, number> = { ticker: 2_500, pulse: 1_000, page: 1_000 };
+const SLOW_GOOD_MS: Record<ServerSource, number> = {
+  ticker: 2_500,
+  pulse: 1_000,
+  page: 1_000,
+  // Ludo (docs/ludo-telemetry.md): half of each patience budget.
+  ludo_action: 50,
+  ludo_rtt: 150,
+  ludo_connect: 500,
+  ludo_lobby: 60_000,
+  ludo_game: Number.MAX_SAFE_INTEGER,
+};
 /** Cap on detailed rows per source per day, so a storm (bots, spam, an outage) cannot bloat the ledger. */
 const MAX_EVENTS_PER_DAY = 500;
 /** Cap on new game sessions per day: /api/rum is public and spoofable (ADR-015). */
@@ -28,6 +39,7 @@ export function ledgerSource(op: SliEvent["op"]): ServerSource | null {
   if (op === "ticker") return "ticker";
   if (op === "pulse_api") return "pulse";
   if (op === "page") return "page";
+  if (op.startsWith("ludo_")) return op as LudoSource;
   return null;
 }
 

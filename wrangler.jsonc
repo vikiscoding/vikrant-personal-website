@@ -34,12 +34,15 @@
   "durable_objects": {
     "bindings": [
       { "name": "VISITS", "class_name": "VisitCounter" },
-      { "name": "LEDGER", "class_name": "SliLedger" }
+      { "name": "LEDGER", "class_name": "SliLedger" },
+      // Ludo rooms (docs/ludo-telemetry.md): one per room, WebSockets with hibernation.
+      { "name": "LUDO", "class_name": "LudoRoom" }
     ]
   },
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["VisitCounter"] },
-    { "tag": "v2", "new_sqlite_classes": ["SliLedger"] }
+    { "tag": "v2", "new_sqlite_classes": ["SliLedger"] },
+    { "tag": "v3", "new_sqlite_classes": ["LudoRoom"] }
   ],
   "vars": {
     // Game-day switch. Changed only by a deploy, never by a request (ADR-010).
