@@ -22,6 +22,7 @@ The owner's personal site (headline, proof items, résumé, contact) plus a smal
 | `worker/rum.ts` | Pulse run telemetry endpoint (the only public write path) |
 | `worker/log.ts` | The one log/SLI event shape (`docs/log-schema.md`) |
 | `worker/faults.ts` | Deploy-time game-day switch |
+| `worker/ludo/`, `src/pages/ludo.astro` | Ludo latency testbed, **proposed** (ADR-026; branch only until its rule conflicts are resolved): `engine.ts` (pure, seeded rules), `room.ts` (one Durable Object per room), `route.ts` (WebSocket upgrade), `telemetry.ts` (event schema). Doc: `docs/ludo-telemetry.md` |
 | `scripts/` | Brand-asset generator |
 | `docs/` | Status, roadmap, ADRs, SLOs, runbook, game days, templates |
 
