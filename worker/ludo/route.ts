@@ -5,7 +5,6 @@ import { record } from "../log";
 
 const ROOM = /^(s-[a-f0-9]{16}|c-[A-Z0-9]{4,6})$/;
 const KEY = /^[a-f0-9]{16}$/;
-const ALLOWED_ORIGINS = new Set(["https://vikrantsingh.fyi", "https://vikrantsingh-fyi.vikrant-singh1.workers.dev"]);
 const isLocal = (o: string) => /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(o);
 
 export async function ludoApi(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -13,7 +12,8 @@ export async function ludoApi(request: Request, env: Env, ctx: ExecutionContext)
   const url = new URL(request.url);
   const origin = request.headers.get("origin") ?? "";
   if (request.headers.get("upgrade")?.toLowerCase() !== "websocket") return new Response("expected websocket", { status: 426 });
-  if (!ALLOWED_ORIGINS.has(origin) && !isLocal(origin)) return new Response("forbidden", { status: 403 });
+  // Same origin only: the page that opened the socket must be served by this Worker (prod, dev or local).
+  if (origin !== url.origin.replace(/^ws/, "http") && !isLocal(origin)) return new Response("forbidden", { status: 403 });
   const room = url.searchParams.get("room") ?? "";
   const key = url.searchParams.get("key") ?? "";
   if (!ROOM.test(room) || !KEY.test(key)) return new Response("bad room or key", { status: 400 });

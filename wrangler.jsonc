@@ -60,5 +60,30 @@
   // Secret, not a var: `npx wrangler secret put GITHUB_TOKEN` (fine-grained, read-only, this repo only).
   // invocation_logs off: Cloudflare's automatic per-request logs include the visitor's IP and all headers,
   // which /privacy says we do not keep. Only our own structured lines (worker/log.ts, no IP) are logged.
-  "observability": { "enabled": true, "head_sampling_rate": 1, "logs": { "enabled": true, "invocation_logs": false } }
+  "observability": { "enabled": true, "head_sampling_rate": 1, "logs": { "enabled": true, "invocation_logs": false } },
+  // Dev Worker for trying branches in a browser: `npm run build && npx wrangler deploy --env dev`.
+  // Its own workers.dev URL and Durable Objects; no custom domain, no cron and no production KV,
+  // so it can never touch the live site, its heartbeat or its SLO clock.
+  "env": {
+    "dev": {
+      "name": "vikrantsingh-fyi-dev",
+      "routes": [],
+      "workers_dev": true,
+      "triggers": { "crons": [] },
+      "durable_objects": {
+        "bindings": [
+          { "name": "VISITS", "class_name": "VisitCounter" },
+          { "name": "LEDGER", "class_name": "SliLedger" },
+          { "name": "LUDO", "class_name": "LudoRoom" }
+        ]
+      },
+      "vars": {
+        "FAULT": "none",
+        "VISITS_MODE": "off",
+        "VISITS_THRESHOLD": "1000",
+        "DASHBOARD_MODE": "on",
+        "GITHUB_REPO": "vikiscoding/vikrant-personal-website"
+      }
+    }
+  }
 }
