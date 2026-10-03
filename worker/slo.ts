@@ -12,6 +12,7 @@ export const TARGETS: Partial<Record<LedgerSource, number>> & { ticker: number; 
   // Ludo, proposed (docs/ludo-telemetry.md). Lobby and game completion are tracked, not objectives.
   ludo_connect: 0.995,
   ludo_action: 0.99,
+  ludo_bot: 0.99,
   ludo_rtt: 0.95,
 };
 
@@ -84,7 +85,7 @@ export async function readWindow(env: Env, windowDays: number): Promise<SloWindo
   return {
     generated_at: new Date().toISOString(),
     window_days: windowDays,
-    summary: (["pulse", "ticker", "page", "ludo_connect", "ludo_action", "ludo_rtt", "ludo_lobby", "ludo_game", "ludo_turn"] as const).map((s) => summarize(days, s)),
+    summary: (["pulse", "ticker", "page", "ludo_connect", "ludo_action", "ludo_bot", "ludo_rtt", "ludo_lobby", "ludo_game", "ludo_turn"] as const).map((s) => summarize(days, s)),
     days,
     events,
     game,
@@ -120,7 +121,7 @@ export async function sloApi(env: Env, url: URL): Promise<Response> {
       const resets = new Date(nextReset()).toISOString();
       return new Response(JSON.stringify({ error: "capacity", detail: "Cloudflare free-tier daily allowance used up", resets_at: resets }), { status: 503, headers: { ...headers, "retry-after": String(Math.ceil((nextReset() - Date.now()) / 1000)) } });
     }
-    console.error(JSON.stringify({ v: 1, ts: new Date().toISOString(), op: "slo_api", outcome: "error", detail: e instanceof Error ? e.message : "read failed" }));
+    console.error(JSON.stringify({ v: 2, ts: new Date().toISOString(), op: "slo_api", outcome: "error", detail: e instanceof Error ? e.message : "read failed" }));
     return new Response(JSON.stringify({ error: "ledger_unavailable" }), { status: 503, headers });
   }
 }

@@ -7,14 +7,17 @@ export type Mode = "solo" | "code" | "unknown";
 /** The allowed detail keys for each op. Adding a key is a schema change: update the doc first. */
 export interface LudoDetail {
   ludo_connect: { mode: Mode; result: "open" | "full" | "busy" | "rejected" | "error" | "capacity"; reason?: string };
-  ludo_action: { mode: Mode; actor: "human" | "bot"; kind: "roll" | "move" | "start"; lag?: number };
+  /** Human actions only (schema v2). Bot steps are summarised per run in ludo_bot. */
+  ludo_action: { mode: Mode; kind: "roll" | "move" | "start" };
+  /** One run of consecutive bot steps, ended when the turn reaches a human, the game ends or the room stops. */
+  ludo_bot: { mode: Mode; steps: number; late: number };
   ludo_rtt: { mode: Mode };
   ludo_turn: { mode: Mode; result: "acted" | "timeout"; kind: "roll" | "move" | "start" };
   ludo_lobby: { result: "started" | "abandoned"; humans: number; bots: number };
   ludo_game: { mode: Mode; result: "won" | "abandoned"; humans: number; winner: string; actions: number };
 }
 
-/** "mode=solo actor=bot kind=roll lag=12": stable key order, no spaces inside values, 200 characters max.
+/** "mode=solo steps=6 late=0": stable key order, no spaces inside values, 200 characters max.
  * Only the shapes in LudoDetail type-check, so a free-text field cannot slip in. */
 export function detail(fields: LudoDetail[keyof LudoDetail]): string {
   return Object.entries(fields as Record<string, string | number | undefined>)

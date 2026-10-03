@@ -45,7 +45,7 @@ export interface Gap {
 }
 
 const log = (outcome: "ok" | "degraded" | "error", detail: string) =>
-  console.log(JSON.stringify({ v: 1, ts: new Date().toISOString(), op: "ledger_backfill", outcome, detail: detail.slice(0, 200) }));
+  console.log(JSON.stringify({ v: 2, ts: new Date().toISOString(), op: "ledger_backfill", outcome, detail: detail.slice(0, 200) }));
 
 /** The open gap, if any: the dashboard and /api/slo use it to say recording is paused, or catching up. Never throws. */
 export async function readGap(env: Env): Promise<Gap | null> {

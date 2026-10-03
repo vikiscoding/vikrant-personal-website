@@ -21,6 +21,7 @@ const EXPECTED: Record<"pulse" | "ticker", number> = { pulse: 8_640, ticker: 4_3
 
 const LUDO_EVENT_LABEL = {
   ludo_action: "Ludo action",
+  ludo_bot: "Ludo bot pace",
   ludo_rtt: "Ludo round trip",
   ludo_connect: "Ludo connect",
   ludo_lobby: "Ludo lobby",
@@ -34,6 +35,7 @@ const LABEL: Record<LedgerSource, string> = {
   frame: "Pulse run frame time",
   game: "Pulse run",
   ludo_action: "Ludo action",
+  ludo_bot: "Ludo bot pace",
   ludo_rtt: "Ludo round trip",
   ludo_connect: "Ludo connect",
   ludo_lobby: "Ludo lobby wait",
@@ -264,7 +266,8 @@ function ludoSection(win: SloWindow): string {
     <p class="dash-small dash-muted">Every roll and move is decided and timed on the server, so these are measured, not reported by browsers. Objectives are proposed and not yet held for a full 30 days.</p>
     <dl class="dash-facts dash-client">
       ${slo("ludo_connect", "Connects answered", "room answered")}
-      ${slo("ludo_action", "Actions on time", "human ≤ 100 ms, bot ≤ 250 ms late")}
+      ${slo("ludo_action", "Player actions on time", "≤ 100 ms")}
+      ${slo("ludo_bot", "Bots on pace", "every step ≤ 250 ms late, per run of bot turns")}
       ${slo("ludo_rtt", "Round trips fast", "≤ 300 ms")}
     </dl>
     <dl class="dash-facts dash-client">

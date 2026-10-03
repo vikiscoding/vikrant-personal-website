@@ -97,7 +97,7 @@ export async function incidentSignal(env: Env, ok: boolean, detail: string, faul
     }
     if (JSON.stringify(s) !== JSON.stringify(before)) await env.PULSE.put(STATE_KEY, JSON.stringify(s));
   } catch (e) {
-    console.error(JSON.stringify({ v: 1, ts: new Date().toISOString(), op: "incident_desk", outcome: "error", detail: e instanceof Error ? e.message : "signal failed" }));
+    console.error(JSON.stringify({ v: 2, ts: new Date().toISOString(), op: "incident_desk", outcome: "error", detail: e instanceof Error ? e.message : "signal failed" }));
   }
 }
 

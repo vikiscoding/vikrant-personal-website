@@ -18,7 +18,7 @@ export interface LogRecord {
 
 /**
  * The query API nests each log line inside an event object whose exact layout is the platform's to choose (parsed
- * fields, or the raw message string). Search the event for a `{ v: 1, op, ts }` object, parsing JSON strings on the way.
+ * fields, or the raw message string). Search the event for a `{ v, op, ts }` object (v 1 or 2: logs keep 3 days, so both can be in a gap), parsing JSON strings on the way.
  */
 export function findRecord(x: unknown, depth = 0): LogRecord | null {
   if (depth > 5 || x === null || x === undefined) return null;
@@ -33,7 +33,7 @@ export function findRecord(x: unknown, depth = 0): LogRecord | null {
   }
   if (typeof x !== "object") return null;
   const o = x as Record<string, unknown>;
-  if (o.v === 1 && typeof o.op === "string" && typeof o.ts === "string") return o as unknown as LogRecord;
+  if ((o.v === 1 || o.v === 2) && typeof o.op === "string" && typeof o.ts === "string") return o as unknown as LogRecord;
   for (const val of Object.values(o)) {
     const r = findRecord(val, depth + 1);
     if (r) return r;

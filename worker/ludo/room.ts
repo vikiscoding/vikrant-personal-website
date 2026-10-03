@@ -56,6 +56,9 @@ interface Meta {
   /** Room chat, newest last, at most CHAT_KEEP lines; cleared when the last player leaves. */
   chat?: ChatLine[];
   chatSeq?: number;
+  /** The bot steps since the turn last left a human: one ludo_bot event when it reaches a human again. Kept in the
+   *  state record (already written every step), so a room paused between alarms loses nothing. */
+  botRun?: { steps: number; worst: number; late: number };
 }
 
 /** Everything about a room except its move log, stored as ONE record. */
@@ -298,7 +301,7 @@ export class LudoRoom extends DurableObject<Env> {
         // Already gone.
       }
     }
-    console.log(JSON.stringify({ v: 1, ts: new Date().toISOString(), op: "ludo_capacity", detail: "free-tier allowance used up; room resting" }));
+    console.log(JSON.stringify({ v: 2, ts: new Date().toISOString(), op: "ludo_capacity", detail: "free-tier allowance used up; room resting" }));
   }
 
   /**
@@ -460,7 +463,7 @@ export class LudoRoom extends DurableObject<Env> {
         this.game = this.step(g, action);
       } catch (e) {
         // A rejected action is the player's mistake (or a stale screen), not a server failure: logged, not an SLI.
-        console.log(JSON.stringify({ v: 1, ts: new Date().toISOString(), op: "ludo_invalid", detail: e instanceof Error ? e.message : "invalid" }));
+        console.log(JSON.stringify({ v: 2, ts: new Date().toISOString(), op: "ludo_invalid", detail: e instanceof Error ? e.message : "invalid" }));
         return this.send(ws, { t: "err", code: e instanceof Error ? e.message : "invalid" });
       }
       if (think !== null && think >= 0) {
@@ -478,7 +481,7 @@ export class LudoRoom extends DurableObject<Env> {
       outcome: ms <= ACTION_GOOD_MS ? "ok" : "degraded",
       status: 200,
       ms,
-      detail: detail({ mode: m.mode, actor: "human", kind: msg.t === "rematch" ? "start" : msg.t }),
+      detail: detail({ mode: m.mode, kind: msg.t === "rematch" ? "start" : msg.t }),
       fault: activeFault(this.env),
     });
   }
@@ -505,7 +508,10 @@ export class LudoRoom extends DurableObject<Env> {
         // finished, everyone left, so the room is left to webSocketClose, which records the game as abandoned.
         if (playing && (g.finished ?? []).length > 0) {
           this.game = endWithoutHumans(g);
-          if (this.game.phase === "over") this.finish(this.game);
+          if (this.game.phase === "over") {
+            this.endBotRun();
+            this.finish(this.game);
+          }
         }
         await this.schedule();
         await this.save();
@@ -589,16 +595,42 @@ export class LudoRoom extends DurableObject<Env> {
       action = g.phase === "roll" ? { seat: g.turn, kind: "roll" } : { seat: g.turn, kind: "move", token: bestMove(g) };
       this.game = this.step(g, action);
     }
+    if (isBot) {
+      // Measured before the save, which the next state write carries: alarm lateness plus the step's own work.
+      const ms = Date.now() - t0 + lag;
+      const run = m.botRun ?? { steps: 0, worst: 0, late: 0 };
+      m.botRun = { steps: run.steps + 1, worst: Math.max(run.worst, ms), late: run.late + (ms > BOT_LAG_GOOD_MS ? 1 : 0) };
+      const g2 = this.game;
+      if (g2.phase === "over" || g2.seats[g2.turn] !== "bot") this.endBotRun();
+    }
     await this.schedule();
     await this.save();
     this.broadcast();
-    const ms = Date.now() - t0 + lag;
-    if (isBot) {
-      this.rec({ op: "ludo_action", outcome: ms <= BOT_LAG_GOOD_MS ? "ok" : "degraded", status: 200, ms, detail: detail({ mode: m.mode, actor: "bot", kind: action.kind, lag }) });
-    } else {
+    if (!isBot) {
       // A human ran out of patience or left: an engagement signal, not a server fault.
       this.rec({ op: "ludo_turn", outcome: "degraded", status: 200, ms: t0 - promptAt, detail: detail({ mode: m.mode, result: "timeout", kind: action.kind }) });
     }
+  }
+
+  /**
+   * Bot steps are summarised, not recorded one by one: a solo game is about three bot steps to every human one, so
+   * per-step events drowned the human signal in ludo_action and cost a log line each (3 Oct 2026). One event per run
+   * of bot turns keeps the pacing signal: `ms` is the worst step's lateness, and the run is good only if every step
+   * was within BOT_LAG_GOOD_MS.
+   */
+  private endBotRun(): void {
+    const m = this.meta!;
+    const run = m.botRun;
+    m.botRun = undefined;
+    if (!run || run.steps === 0) return;
+    this.rec({
+      op: "ludo_bot",
+      outcome: run.late === 0 ? "ok" : "degraded",
+      status: 200,
+      ms: run.worst,
+      detail: detail({ mode: m.mode, steps: run.steps, late: run.late }),
+      fault: activeFault(this.env),
+    });
   }
 
   async webSocketClose(ws: WebSocket): Promise<void> {
@@ -642,6 +674,7 @@ export class LudoRoom extends DurableObject<Env> {
         detail: detail({ mode: m.mode, result: "abandoned", humans: g.seats.filter((k) => k === "human").length, winner: "none", actions: g.log.length }),
       });
     }
+    this.endBotRun(); // the room stops: an unfinished run of bot turns still counts
     m.due = null;
     m.names = [null, null, null, null]; // names and chat live only while someone is in the room
     m.chat = [];

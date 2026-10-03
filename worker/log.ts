@@ -9,7 +9,7 @@ export type Outcome = "ok" | "degraded" | "error";
 export type Dep = "github" | "kv" | "assets" | "none";
 
 export interface SliEvent {
-  op: "ticker" | "page" | "pulse_api" | "visits" | "ludo_action" | "ludo_rtt" | "ludo_connect" | "ludo_lobby" | "ludo_game" | "ludo_turn";
+  op: "ticker" | "page" | "pulse_api" | "visits" | "ludo_action" | "ludo_bot" | "ludo_rtt" | "ludo_connect" | "ludo_lobby" | "ludo_game" | "ludo_turn";
   outcome: Outcome;
   status: number;
   ms: number;
@@ -22,7 +22,7 @@ export interface SliEvent {
 /** Log one SLI event. With `ctx`, it is also written to the ledger in the background (never blocks, never throws). */
 export function record(env: Env, ev: SliEvent, ctx?: ExecutionContext): void {
   const ts = new Date().toISOString();
-  const line = JSON.stringify({ v: 1, ts, ...ev });
+  const line = JSON.stringify({ v: 2, ts, ...ev });
   if (ev.outcome === "error") console.error(line);
   else console.log(line);
   try {
@@ -54,7 +54,7 @@ function ledgerEntry(ev: SliEvent, ts: string): LedgerEntry | null {
 export function logUnrecorded(entries: LedgerEntry[], e: unknown): void {
   const detail = e instanceof Error ? e.message : "add failed";
   for (const entry of entries) {
-    console.error(JSON.stringify({ v: 1, ts: new Date().toISOString(), op: "ledger_unrecorded", outcome: "error", detail: detail.slice(0, 160), entry }));
+    console.error(JSON.stringify({ v: 2, ts: new Date().toISOString(), op: "ledger_unrecorded", outcome: "error", detail: detail.slice(0, 160), entry }));
   }
 }
 
