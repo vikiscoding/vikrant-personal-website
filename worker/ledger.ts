@@ -9,7 +9,7 @@ import { addDays, localDay } from "./time";
 
 /** Server sources (ticker, pulse, page), client frame samples (frame) and client game errors (game). */
 export type LedgerSource = ServerSource | "frame" | "game";
-type LudoSource = "ludo_action" | "ludo_rtt" | "ludo_connect" | "ludo_lobby" | "ludo_game" | "ludo_turn";
+type LudoSource = "ludo_action" | "ludo_bot" | "ludo_rtt" | "ludo_connect" | "ludo_lobby" | "ludo_game" | "ludo_turn";
 type ServerSource = "ticker" | "pulse" | "page" | LudoSource;
 
 /** Histogram upper edges (ms); the last bucket is "over the last edge". Same column count for both sets. */
@@ -24,6 +24,7 @@ const SLOW_GOOD_MS: Record<ServerSource, number> = {
   page: 1_000,
   // Ludo (docs/ludo-telemetry.md): half of each patience budget.
   ludo_action: 50,
+  ludo_bot: 125,
   ludo_rtt: 150,
   ludo_connect: 500,
   ludo_lobby: 60_000,
@@ -151,7 +152,7 @@ export class SliLedger extends DurableObject<Env> {
           errored INTEGER NOT NULL DEFAULT 0, janky INTEGER NOT NULL DEFAULT 0,
           best_score INTEGER NOT NULL DEFAULT 0,
           PRIMARY KEY (day, session))`)      } catch (e) {
-        console.error(JSON.stringify({ v: 1, ts: new Date().toISOString(), op: "ledger", outcome: "error", detail: `schema setup refused: ${e instanceof Error ? e.message : "unknown"}`.slice(0, 200) }));
+        console.error(JSON.stringify({ v: 2, ts: new Date().toISOString(), op: "ledger", outcome: "error", detail: `schema setup refused: ${e instanceof Error ? e.message : "unknown"}`.slice(0, 200) }));
       }
     });
   }

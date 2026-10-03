@@ -120,7 +120,7 @@ async function dashboardHtml(env: Env): Promise<string | null> {
       return renderDashboard(copy.window, pulse, feed, desk, Date.now(), gap, { asOf: copy.saved_at, capacity: isCapacity(e) });
     }
     if (isCapacity(e)) return capacityCard();
-    console.error(JSON.stringify({ v: 1, ts: new Date().toISOString(), op: "dashboard", outcome: "error", detail: e instanceof Error ? e.message : "render failed" }));
+    console.error(JSON.stringify({ v: 2, ts: new Date().toISOString(), op: "dashboard", outcome: "error", detail: e instanceof Error ? e.message : "render failed" }));
     return unavailable();
   }
 }

@@ -82,7 +82,7 @@ export async function rumApi(request: Request, env: Env, ctx: ExecutionContext):
     const ts = new Date().toISOString();
     ctx.waitUntil(
       Promise.resolve(stub.addGame(event, ts, activeFault(env))).catch((e) =>
-        console.error(JSON.stringify({ v: 1, ts, op: "rum", outcome: "error", detail: e instanceof Error ? e.message : "addGame failed" })),
+        console.error(JSON.stringify({ v: 2, ts, op: "rum", outcome: "error", detail: e instanceof Error ? e.message : "addGame failed" })),
       ),
     );
   }

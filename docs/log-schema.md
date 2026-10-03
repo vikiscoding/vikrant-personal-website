@@ -1,4 +1,4 @@
-# Log schema (v1)
+# Log schema (v2)
 
 One JSON line per unit of work, emitted by `worker/log.ts`. The same fields go to Workers Logs (console), the SLI ledger and, once enabled, Analytics Engine (`site_sli`). None of them shares a failure domain with KV, so a KV outage is still recorded.
 
@@ -12,7 +12,7 @@ Two operational lines sit outside the SLI shape: `ledger_unrecorded` (an entry t
 
 | Field | Type | Values | Analytics Engine column |
 | --- | --- | --- | --- |
-| `v` | number | `1` | — |
+| `v` | number | `2` since 3 Oct 2026; `1` before (see Versions) | — |
 | `ts` | ISO string, **UTC** | Ledger `day` = Toronto calendar date of `ts` (ADR-014) | `timestamp` (automatic) |
 | `op` | string | `ticker`, `page`, `pulse_api`, `visits` (counter failures and timeouts only) | `index1`, `blob1` |
 | `outcome` | string | `ok`, `degraded`, `error` | `blob2` |
@@ -30,5 +30,10 @@ Two operational lines sit outside the SLI shape: `ledger_unrecorded` (an entry t
 - `error`: the unit of work failed. For `pulse_api` that includes returning 503 because the snapshot is stale.
 
 Change the schema by bumping `v` and adding a row here in the same PR.
+
+## Versions
+
+- **v2 (3 Oct 2026):** Ludo bot steps leave `ludo_action` (now human actions only; `actor` and `lag` removed from its `detail`) for a new `ludo_bot` op, one event per run of consecutive bot turns. Every other field and op is unchanged. The backfill parser reads v1 and v2 lines, since Workers Logs keep three days.
+- **v1:** the original shape.
 
 Ludo events (`ludo_*`) use this same shape; their `detail` keys per op are fixed in `worker/ludo/telemetry.ts` and listed in [ludo-telemetry.md](ludo-telemetry.md).

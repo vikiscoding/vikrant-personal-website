@@ -86,7 +86,7 @@ export async function runTicker(env: Env, ctx?: ExecutionContext): Promise<void>
     await reconcileLedger(env, ledger); // a ledger outage is never an incident: only noted here, and backfilled later
     if (ledger === "ok") {
       // Keep the read copy fresh while the ledger is healthy; it is what the dashboard shows if the ledger cannot be read.
-      await saveSloCopy(env).catch((e) => console.error(JSON.stringify({ v: 1, ts: new Date().toISOString(), op: "slo_copy", outcome: "error", detail: e instanceof Error ? e.message : "save failed" })));
+      await saveSloCopy(env).catch((e) => console.error(JSON.stringify({ v: 2, ts: new Date().toISOString(), op: "slo_copy", outcome: "error", detail: e instanceof Error ? e.message : "save failed" })));
     }
   } catch (e) {
     const err = e instanceof DepError ? e : new DepError("github", String(e), 500);

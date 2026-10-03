@@ -35,15 +35,18 @@ Every Ludo event is an ordinary SLI event (`docs/log-schema.md`): `v, ts, op, ou
 | op (ledger source) | Emitted | `ms` means | `outcome` ok when | `detail` keys | Proposed target |
 | --- | --- | --- | --- | --- | --- |
 | `ludo_connect` | each WebSocket upgrade, in the site Worker | time to the room's answer | 101, or a correct 4xx (full, busy) | `mode` solo/code · `result` open/full/busy/rejected/error · `reason`? | 99.5% |
-| `ludo_action` | each human action; each bot step | human: receive → saved → broadcast · bot: alarm lateness + work | human ≤ 100 ms · bot ≤ 250 ms | `mode` · `actor` human/bot · `kind` roll/move/start · `lag`? (bot) | 99% |
+| `ludo_action` | each human action | receive → saved → broadcast | ≤ 100 ms | `mode` · `kind` roll/move/start | 99% |
+| `ludo_bot` | each run of consecutive bot turns, when the turn reaches a human, the game ends or the room stops | the worst step's lateness: alarm lateness + work | every step ≤ 250 ms late | `mode` · `steps` · `late` (steps over 250 ms) | 99% |
 | `ludo_rtt` | server probe every 15 s, echoed at once by the page | server-timed round trip | ≤ 300 ms | `mode` | 95% |
 | `ludo_turn` | each human action on their turn; each 15 s prompt timeout | think time: prompt pushed → action received | the human acted (a timeout is "degraded") | `mode` · `result` acted/timeout · `kind` | tracked |
 | `ludo_lobby` | code room start, or the last player leaving the lobby | wait since the room was created | started within 2 min | `result` started/abandoned · `humans` · `bots` | tracked |
 | `ludo_game` | a winner, or the last player leaving mid-game | game duration | a winner | `mode` · `result` won/abandoned · `humans` · `winner` human/bot/none · `actions` | tracked |
 
+**Why bot steps are summarised (schema v2, 3 Oct 2026).** A solo game has about three bot steps to every human one, so per-step bot events made up most of `ludo_action` and hid how fast the server answers people. They also cost a log line each while saying little: a bot step is either on pace or not. Bot pacing still matters (it is the rhythm a solo player waits through, and only it catches a late alarm), so it has its own source, one event per run. Before 3 Oct 2026, `ludo_action` counts both; the 30-day window mixes the two until that day ages out (2 Nov 2026).
+
 Logged only, not in the ledger: `ludo_invalid` (a rejected action: the player's mistake or a stale screen, never a server failure).
 
-**Where it shows:** `/reliability/#ludo` (Server path card: the three proposed objectives with worst-day p95, games finished, lobbies started, turns timed out and today's median think time) and `/api/slo?days=N` (`summary` and `days` rows for every `ludo_*` source). Ludo events are kept off the site's Failures list.
+**Where it shows:** `/reliability/#ludo` (Server path card: the four proposed objectives with worst-day p95, games finished, lobbies started, turns timed out and today's median think time) and `/api/slo?days=N` (`summary` and `days` rows for every `ludo_*` source). Ludo events are kept off the site's Failures list.
 
 **Game day:** deploy `FAULT=ludo_slow` (adds 400 ms to every human action) and watch `ludo_action` burn its budget; restore with `FAULT=none`.
 
