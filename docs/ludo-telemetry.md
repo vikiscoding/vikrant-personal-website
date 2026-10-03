@@ -114,7 +114,7 @@ The account is on Cloudflare's Workers Free plan: Durable Objects get 100,000 ro
 
 ## Game rules worth knowing
 
-- **Play continues for every place.** A player who brings all four tokens home is recorded 1st, 2nd and so on; finished seats are skipped, and the game ends when one player is left (last place). Each finisher can keep watching or leave; game over shows the full placings.
+- **Play continues while a human is still playing.** A player who brings all four tokens home is recorded 1st, 2nd and so on, and finished seats are skipped. The game ends when one player is left (last place), or as soon as no human has tokens left to bring home: bots never play on against bots for the last places (owner's rule, 3 Oct 2026). The remaining bots then take the last places by board position, marked "by board position" on the game-over card (`endWithoutHumans` in the engine; `earned` counts the places won by finishing). It is pure, so solo games still replay exactly; the room also applies it when a leaving player's seat goes to a bot. Each finisher in a game with other humans still playing can keep watching or leave.
 - **Leave at any time.** In a friends' room a bot takes a playing seat at once, so the others play on (a lobby seat is simply freed, and the old seat key cannot come back). When the last person leaves, or in a solo game, the room stops: no alarm and no bots playing to an empty room. Telemetry counts a game as completed if anyone finished before everyone left.
 
 ## Telemetry not built yet

@@ -10,7 +10,7 @@ import type { LedgerEntry } from "../ledger";
 import { logUnrecorded, record, type SliEvent } from "../log";
 import { detail } from "./telemetry";
 import { cleanChat, cleanName } from "./text";
-import { apply, autoAction, bestMove, newGame, SEATS, start, type Action, type Game, type SeatKind } from "./engine";
+import { apply, autoAction, bestMove, endWithoutHumans, newGame, SEATS, start, type Action, type Game, type SeatKind } from "./engine";
 
 /** Pacing and patience budgets (docs/ludo-telemetry.md). */
 export const BOT_STEP_MS = 700;
@@ -501,6 +501,12 @@ export class LudoRoom extends DurableObject<Env> {
         m.keys[seat] = null;
         if (m.names) m.names[seat] = null;
         if (playing && g.turn === seat) m.promptAt = Date.now();
+        // If that was the last human still playing, stop: bots do not play on for the places. When nobody has
+        // finished, everyone left, so the room is left to webSocketClose, which records the game as abandoned.
+        if (playing && (g.finished ?? []).length > 0) {
+          this.game = endWithoutHumans(g);
+          if (this.game.phase === "over") this.finish(this.game);
+        }
         await this.schedule();
         await this.save();
         this.broadcast();
@@ -668,6 +674,7 @@ export class LudoRoom extends DurableObject<Env> {
       legal: g.legal,
       winner: g.winner,
       finished: g.finished ?? [],
+      earned: g.earned ?? null,
       names: m.names ?? [null, null, null, null],
       rolls: g.rolls ?? [[], [], [], []],
       lastRoller: lastRoller(g),

@@ -34,6 +34,9 @@ export interface Game {
   /** Finishing order, 1st first. Play continues until one seat is left, which takes last place. Optional only so
    *  games saved before it existed still load. */
   finished?: number[];
+  /** Set when the game ended because no human was left playing: how many places in `finished` were earned by
+   *  bringing every token home. The rest are bots ranked by how far along the board they were. */
+  earned?: number;
   /** Each seat's last ten dice, oldest first. Optional only so games saved before it existed still load. */
   rolls?: number[][];
   /** Every applied action, in order: the replay record. */
@@ -145,10 +148,27 @@ export function apply(g: Game, a: Action): Game {
       return { ...g, tokens, die: null, legal: [], phase: "over", winner, finished: [...finished, ...left], log };
     }
     const after = { ...g, finished };
-    return { ...g, tokens, die: null, legal: [], phase: "roll", winner, finished, turn: nextSeat(after, a.seat), log };
+    return endWithoutHumans({ ...g, tokens, die: null, legal: [], phase: "roll", winner, finished, turn: nextSeat(after, a.seat), log });
   }
   const again = die === 6 || captured || to === HOME;
   return { ...g, tokens, die: null, legal: [], phase: "roll", turn: again ? a.seat : nextSeat(g, a.seat), log };
+}
+
+/**
+ * Play goes on only while a human still has tokens to bring home: bots playing bots for the last places is compute
+ * nobody watches (owner's rule, 3 Oct 2026). With no unfinished human seat left, the game ends; the remaining seats
+ * take the last places by total progress (ties by seat order), and `earned` marks where the earned places stop.
+ * Pure, so a solo game still replays exactly; the room also calls it when a player leaves and a bot takes the seat.
+ */
+export function endWithoutHumans(g: Game): Game {
+  if (g.phase !== "roll" && g.phase !== "move") return g;
+  const done = g.finished ?? [];
+  const left = g.seats.map((k, s) => (k !== "empty" && !done.includes(s) ? s : -1)).filter((s) => s >= 0);
+  if (left.some((s) => g.seats[s] === "human")) return g;
+  const progress = (s: number) => (g.tokens[s] ?? []).reduce((n, p) => n + p + 1, 0);
+  const rest = [...left].sort((a, b) => progress(b) - progress(a) || a - b);
+  const finished = [...done, ...rest];
+  return { ...g, die: null, legal: [], phase: "over", winner: g.winner ?? finished[0] ?? null, finished, earned: done.length };
 }
 
 /** The server's move for a bot or a timed-out human: a seeded random legal action. */
