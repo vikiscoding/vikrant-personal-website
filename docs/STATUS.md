@@ -2,14 +2,14 @@
 
 What is live, what is verified, what is pending. Rewrite this file at the end of every working session to match reality; replace, do not append.
 
-Last updated: 3 Oct 2026. Production is unchanged. The copy below is what is on `main`.
+Last updated: 3 Oct 2026 (after the homepage copy deploy).
 
 ## Live
 
 | Component | State |
 | --- | --- |
 | Site | https://vikrantsingh.fyi on Cloudflare Workers; `main` deploys through GitHub Actions; `http` and `www` redirect to the apex |
-| Homepage | Headline "IT Operations and Engineering"; the record (Citi/Virtusa, Ontario/CompuCom); "Proof you can open": this site's reliability (Pulse run and Ludo inside it, both postmortems linked), the incident desk, Balance-Books, Atlas Flow's live site; "Scope:" lines (ADR-022, ADR-023). Nav: Home · Live reliability · Writing · Play (ADR-024) |
+| Homepage | Headline "IT Operations and Engineering"; the record (Citi/Virtusa, Ontario/CompuCom, no automation or restore-time percentage); "A short path" above "Proof you can open" (reliability, the free-tier note, the incident issues, game day 1); proof: this site's reliability (Pulse run and Ludo inside it, both postmortems linked), the incident desk, Balance-Books, Atlas Flow's live site; "Scope:" lines (ADR-022, ADR-023). Writing index leads with those two notes. Nav: Home · Live reliability · Writing · Play (ADR-024) |
 | Heartbeat | Cron every 10 min fetches this repo's latest commit and CI status from GitHub into KV; the footer shows it; `/api/pulse` returns 200 while the snapshot is under 35 min old |
 | Outside probe | UptimeRobot keyword monitor on `/api/pulse` every 5 min; email alerts. SLO clock Day 0 = 30 Sep 2026 |
 | SLI ledger | Durable Object `SliLedger`: daily counts and histograms per source, failures in full; public `/api/slo?days=N` (503 `capacity` with `Retry-After` when the free-tier allowance is used up). Refused writes are logged as `ledger_unrecorded` and rebuilt from Workers Logs on the next healthy run (ADR-028) |
@@ -26,7 +26,7 @@ Last updated: 3 Oct 2026. Production is unchanged. The copy below is what is on 
 - Endpoint validation for `/api/rum` (origin, size, type, bounds), scripted playthroughs, the `game_js_error` game day, degrade-open behaviour, the Toronto-time boundaries across DST.
 - Live desk policy: the engine's live workflow runs with `TRIAGE_AUTO_APPLY=off`, so a confident Low still waits for `/approve` (engine test `test_live_desk_never_auto_applies_even_low`, ADR-021).
 - Desk records keep the rule they ran under (ADR-025): the one pre-ADR-021 ticket reads "auto-applied under the earlier low-risk rule"; the owner's latest `/note` shows on each ticket (issue #2 says game day 1's alert landed there).
-- Homepage copy: every figure traced to the résumé or the owner's confirmation before publishing (ADR-022).
+- Homepage copy: every figure traced to the résumé or the owner's confirmation before publishing (ADR-022). 3 Oct 2026: the CompuCom 55% and 35% figures are off the page; the short path and the writing-index notes are live (checked on https://vikrantsingh.fyi/ and `/notes/`). CI run for `e542430` succeeded.
 - Ludo fixes (3 Oct 2026, branch `ludo-play-fixes`): a moved token no longer vanishes until the next roll (the last animation frame dropped it); invite screen shows one action; the game ends with the last human. Verified: `npm run check`; 2,000 seeded engine games finish, replay exactly and never move a bot after the last human finishes; local friends' room over WebSockets (start with bots, leave, play goes on); invite and plain start screens rendered headless. Not yet tried on a phone.
 - Ludo (2 Oct 2026): 2,000 seeded games replay exactly and run to full placings; live tests of solo, four-player, rematch, leave (lobby, mid-game, solo stops the room), chat in 18 scripts, names; phone and desktop renders; dev load test at 40 rooms (p99 240 to 80 ms after ADR-027).
 - Free-tier incident (2 Oct 2026, self-inflicted): capacity messages verified live during the outage (Ludo napping screen, dashboard card, `/api/slo` 503 `capacity`); heartbeat stayed fresh and no incident opened. Record: `docs/incidents/2026-10-02-free-tier-writes.md`; public postmortem: `/notes/postmortem-free-tier-writes/`.
@@ -34,7 +34,6 @@ Last updated: 3 Oct 2026. Production is unchanged. The copy below is what is on 
 
 ## Pending
 
-- Homepage and writing copy on branch `home-copy-walk`, not on `main` and not deployed. CompuCom no longer states 55% or 35%. Writing leads with the two postmortems. A short path sits above the proof cards. Email and résumé were already live.
 - Game day 2 (2 Oct 2026, `FAULT=github_5xx`, held until the outside monitor went Down, then restored and worked through the gate on incident #3): write its record in `docs/gamedays/` from the template, including whether the alert reached the owner.
 - Cloudflare CI token expiry is still `TODO` in `docs/runbook.md`.
 - **Backfill result for 2 Oct:** the gap (17:36 UTC to the 00:00 UTC reset) is seeded in KV `ledger:gap`; after the reset it replays one 30-minute slice per run (about 13 runs). Confirm the key is gone and `op = ledger_backfill` lines report what was restored, then mark finding 7 in the postmortem and its raw record as done.
