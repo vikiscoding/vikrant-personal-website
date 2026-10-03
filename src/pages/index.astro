@@ -1,6 +1,7 @@
 ---
 // Home page (ADR-022): outcome-first headline, the record in three short paragraphs, what I hold a team to,
-// proof you can open, writing, contact. All copy lives in src/data/profile.ts.
+// a short path, proof you can open, writing, contact. All copy lives in src/data/profile.ts.
+// The short path is a walk, not a fifth proof item (ADR-022, ADR-023).
 import Base from "../layouts/Base.astro";
 import { profile } from "../data/profile";
 ---
@@ -12,6 +13,20 @@ import { profile } from "../data/profile";
   {profile.story.map((line) => <p>{line}</p>)}
   <p><strong>{profile.principles.lead}</strong> {profile.principles.text}</p>
   <p><strong>{profile.aim.lead}</strong> {profile.aim.text}</p>
+
+  <h2>{profile.shortPath.heading}</h2>
+  <p>{profile.shortPath.lede}</p>
+  <ol class="path">
+    {
+      profile.shortPath.steps.map((step) => (
+        <li>
+          <a href={step.href}>{step.label}</a>
+          {" — "}
+          {step.text}
+        </li>
+      ))
+    }
+  </ol>
 
   <h2>Proof you can open</h2>
   <ul class="proof">
@@ -52,6 +67,8 @@ import { profile } from "../data/profile";
   h1 { margin-bottom: 0.5rem; }
   .intro { font-size: 1.1875rem; margin: 0 0 1.5rem; }
   h2 { font-size: 1.125rem; margin: 2.5rem 0 0.75rem; }
+  .path { margin: 0.25rem 0 0; padding-left: 1.25rem; }
+  .path li { margin: 0.45rem 0; }
   .proof { list-style: none; padding: 0; display: grid; gap: 1rem; }
   .card { border: 1px solid var(--line); border-radius: 8px; padding: 1rem 1.25rem; }
   .card h3 { margin: 0 0 0.35rem; font-size: 1rem; }

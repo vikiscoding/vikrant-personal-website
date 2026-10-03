@@ -1,19 +1,34 @@
 ---
-// Writing index. Lists Medium posts with date and one claim in the post's own words; links to the canonical URL.
-// Never republish full posts here.
+// Writing index. On-site notes first, then Medium posts (title, date, one claim, outbound link).
+// Never republish full posts here. Medium titles, dates and claims stay the feed's own words.
 import Base from "../../layouts/Base.astro";
-import { formatDate, writing } from "../../data/profile";
+import { formatDate, siteNotes, writing } from "../../data/profile";
 ---
 
-<Base title="Writing · vikrantsingh.fyi" description="Essays on AI in operations: gated agents, review at scale, and owning the change.">
+<Base title="Writing · vikrantsingh.fyi" description="Notes from running this site, then essays on AI in operations: gated agents, review at scale, and owning the change.">
   <h1>Writing</h1>
-  <p>Short essays on putting AI into operations without losing who decides.</p>
+  <p>Notes from running this site, then short essays on putting AI into operations without losing who decides.</p>
 
+  <h2 class="section">Notes</h2>
+  <ol class="posts">
+    {
+      siteNotes.map((n) => (
+        <li>
+          <h3><a href={n.href}>{n.title}</a></h3>
+          <p class="meta"><time class="muted" datetime={n.date}>{formatDate(n.date)}</time></p>
+          <p class="claim">{n.claim}</p>
+          <p><a href={n.href}>Read the note →</a></p>
+        </li>
+      ))
+    }
+  </ol>
+
+  <h2 class="section">Essays</h2>
   <ol class="posts">
     {
       writing.map((p) => (
         <li>
-          <h2><a href={p.url}>{p.title}</a></h2>
+          <h3><a href={p.url}>{p.title}</a></h3>
           <p class="meta"><time class="muted" datetime={p.date}>{formatDate(p.date)}</time></p>
           <p class="claim">{p.claim}</p>
           <p><a href={p.url}>Read on Medium →</a></p>
@@ -22,19 +37,18 @@ import { formatDate, writing } from "../../data/profile";
     }
   </ol>
 
-  <h2 class="also">On this site</h2>
+  <h2 class="also">Also on this site</h2>
   <ul class="onsite">
-    <li><a href="/notes/postmortem-free-tier-writes/">Postmortem: a load test used up the day's database writes</a> <time class="muted" datetime="2026-10-02">· 2 Oct 2026</time>. A real, self-inflicted incident: what broke, what didn't, and the rule that came out of it.</li>
-    <li><a href="/notes/postmortem-game-day-1/">Postmortem: game day 1</a> <time class="muted" datetime="2026-10-01">· 1 Oct 2026</time>. I broke this site on purpose; eight findings, six fixed.</li>
     <li><a href="/notes/how-this-site-is-run/">How this site is run</a>: the heartbeat, the probe and the objectives behind the <a href="/reliability/">Live reliability</a> page.</li>
   </ul>
 </Base>
 
 <style>
-  .posts { list-style: none; padding: 0; margin: 2rem 0 0; display: grid; gap: 1.75rem; }
-  .posts h2 { font-size: 1.0625rem; margin: 0; line-height: 1.35; }
-  .posts h2 a { color: var(--fg); text-decoration: none; }
-  .posts h2 a:hover { text-decoration: underline; }
+  .section { font-size: 1rem; margin: 2.25rem 0 0; }
+  .posts { list-style: none; padding: 0; margin: 0.75rem 0 0; display: grid; gap: 1.75rem; }
+  .posts h3 { font-size: 1.0625rem; margin: 0; line-height: 1.35; font-weight: 650; }
+  .posts h3 a { color: var(--fg); text-decoration: none; }
+  .posts h3 a:hover { text-decoration: underline; }
   .posts p { margin: 0.2rem 0; }
   .meta { font-size: 0.875rem; }
   .claim { font-style: italic; }

@@ -2,7 +2,7 @@
 
 What is live, what is verified, what is pending. Rewrite this file at the end of every working session to match reality; replace, do not append.
 
-Last updated: 2 Oct 2026 (evening, after the free-tier incident).
+Last updated: 3 Oct 2026. Production is unchanged. The copy below is what is on `main`.
 
 ## Live
 
@@ -34,6 +34,7 @@ Last updated: 2 Oct 2026 (evening, after the free-tier incident).
 
 ## Pending
 
+- Homepage and writing copy on branch `home-copy-walk`, not on `main` and not deployed. CompuCom no longer states 55% or 35%. Writing leads with the two postmortems. A short path sits above the proof cards. Email and résumé were already live.
 - Game day 2 (2 Oct 2026, `FAULT=github_5xx`, held until the outside monitor went Down, then restored and worked through the gate on incident #3): write its record in `docs/gamedays/` from the template, including whether the alert reached the owner.
 - Cloudflare CI token expiry is still `TODO` in `docs/runbook.md`.
 - **Backfill result for 2 Oct:** the gap (17:36 UTC to the 00:00 UTC reset) is seeded in KV `ledger:gap`; after the reset it replays one 30-minute slice per run (about 13 runs). Confirm the key is gone and `op = ledger_backfill` lines report what was restored, then mark finding 7 in the postmortem and its raw record as done.

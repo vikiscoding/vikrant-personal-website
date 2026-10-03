@@ -22,6 +22,34 @@ export interface Post {
   url: string;
 }
 
+/**
+ * On-site notes, newest first. Listed above the essays; the bodies stay on their own pages.
+ * Claims are the owner's one-line readings. "Decision", not "step": game day 1's note says an AI
+ * triaged the alert and every decision after that stayed with a person.
+ */
+export interface SiteNote {
+  title: string;
+  /** YYYY-MM-DD */
+  date: string;
+  claim: string;
+  href: string;
+}
+
+export const siteNotes: SiteNote[] = [
+  {
+    title: "When a load test used up the day's database writes",
+    date: "2026-10-02",
+    claim: "The failure looked like a choice. The logs said otherwise.",
+    href: "/notes/postmortem-free-tier-writes/",
+  },
+  {
+    title: "Game day 1",
+    date: "2026-10-01",
+    claim: "The site raised it. A human still made every decision after.",
+    href: "/notes/postmortem-game-day-1/",
+  },
+];
+
 /** Medium posts, newest first. Titles, dates and URLs from the Medium feed (medium.com/feed/@svikrant), 30 Sep 2026. */
 export const writing: Post[] = [
   {
@@ -60,7 +88,9 @@ export function formatDate(iso: string): string {
 // Homepage copy by the owner (1 Oct 2026, ADR-022), with factual corrections agreed in review:
 // "IT services" not "software" for fifteen years (2009–2017 was IT operations); the ~95% is the infrastructure
 // for the 22 programs (résumé); the CompuCom team supported the estate, the integration was an SME role (résumé);
-// 55% / 35% are the owner's figures (not on the résumé); drafts are never sent by anyone.
+// drafts are never sent by anyone.
+// 3 Oct 2026: the CompuCom 55% and 35% figures came off this page. They were the owner's, not on the résumé,
+// and the paragraph no longer states a magnitude for automation or restore time.
 export const profile = {
   name: "Vikrant Singh",
   // Must match the LinkedIn headline. Regenerate public/og.png when it changes (scripts/make-brand-assets.py).
@@ -72,7 +102,7 @@ export const profile = {
   story: [
     "For fifteen years I've been accountable for IT services reaching people and staying up.",
     "At Citi, through Virtusa, I ran delivery across 22 Trade and Transaction Services programs in North America, from design to go-live; the infrastructure for all 22 landed about 95% on time. Root-cause work on two trade applications cut repeat incidents by 60%.",
-    "For the Government of Ontario, through CompuCom (2018–2021), I led a 15-person team supporting a 24x7 estate of 3,000+ servers, and was the subject-matter expert on its ServiceNow–Remedy integration. I was the person the client called on Sev-1 and Sev-2, and I ran the response through restore. Fully automated resolution went from zero to 55% of volume, and time to restore fell by 35%.",
+    "For the Government of Ontario, through CompuCom (2018–2021), I led a 15-person team supporting a 24x7 estate of 3,000+ servers, and was the subject-matter expert on its ServiceNow–Remedy integration. I was the person the client called on Sev-1 and Sev-2, and I ran the response through restore. We moved a large share of that volume onto automated resolution and shortened restore time by tightening the integration path and the runbooks around it.",
   ],
   principles: {
     lead: "What I hold a team to.",
@@ -81,6 +111,38 @@ export const profile = {
   aim: {
     lead: "What I'm building toward.",
     text: "Owning a product team end to end: the build as well as the run.",
+  },
+  // Minute walk above "Proof you can open". Not a fifth proof item (ADR-022, ADR-023): these four links
+  // already exist. "Early readings" because the first 30-day window is still open (completes 30 Oct 2026);
+  // this line must not read as a finished error budget. The free-tier line does not call that event an outage:
+  // pages kept serving, and capacity is not paged (incident of 2 Oct 2026).
+  shortPath: {
+    heading: "A short path",
+    lede: "If you only have a minute:",
+    steps: [
+      {
+        label: "Live reliability",
+        href: "/reliability/",
+        text: "this site's own SLOs and error budgets (still early readings) and recent failures.",
+      },
+      {
+        label: "When the write budget ran out",
+        href: "/notes/postmortem-free-tier-writes/",
+        text: "a load test of mine used up the day's database writes, and what changed after.",
+      },
+      {
+        label: "Incident desk",
+        // /issues alone is open-only, and every ticket so far is closed, so that page looks empty.
+        // is:issue is the public record, open and closed, not a hand-picked subset.
+        href: "https://github.com/vikiscoding/vikrant_perswebsite_incidents_aiengine/issues?q=is%3Aissue",
+        text: "alerts land as public issues; an agent proposes, and a human authorizes every decision after that.",
+      },
+      {
+        label: "Game day 1",
+        href: "/notes/postmortem-game-day-1/",
+        text: "a planned fault, already run, through detect, triage, and restore.",
+      },
+    ],
   },
   location: "Toronto, Canada",
   // null = not rendered.
