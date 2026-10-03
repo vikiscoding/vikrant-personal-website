@@ -31,7 +31,8 @@ Raw record for the postmortem (template: `docs/templates/postmortem.md`; public 
 | ~19:05 | Today's gap seeded: `ledger:gap` = 17:36:19.792 to 00:00, mode `events` | KV |
 | 19:35 | Checked on the dev Worker: with writes exhausted, even `SELECT 1` and a read of `sqlite_master` are refused ("Exceeded allowed rows written"); reads are not possible | dev Workers Logs (`DIAG` lines) |
 | 19:45 | Read copy of the 30-day window in KV (`slo:last`), refreshed by every healthy run; dashboard and `/api/slo` fall back to it with "Recording paused since…" (ADR-029). Verified locally with `FAULT=ledger_read_fail` | branch `ledger-read-during-capacity` |
-| 00:00 (3 Oct) | Allowance resets; backfill replays the gap from Workers Logs, a slice per run | **Pending: result to be added** |
+| 00:00 (3 Oct) | Allowance resets; backfill replays the gap from Workers Logs, a slice per run | Page captures 00:30 to 01:41 UTC show "Catching up on readings" throughout (`2026-10-02-free-tier-writes-record/`, local) |
+| by 05:17 (3 Oct) | Gap closed: `/api/slo` reports no recording gap and the banner is gone. 2 Oct: 140 of 144 scheduled runs, 304 probe checks on record | `/api/slo?days=30` |
 
 Time to detect: minutes, by a person, not by a signal (finding 4). Time to mitigate the user-facing confusion: 6 min after confirmation (17:42 to 17:48). Time to restore: the 00:00 UTC reset (no earlier restore exists on the Free plan).
 
@@ -52,10 +53,12 @@ Time to detect: minutes, by a person, not by a signal (finding 4). Time to mitig
 | 4 | Detection was by eye: no signal said the ledger was refusing writes | The heartbeat now notices refused writes and opens a backfill gap (deliberately not a page or an incident) | Fixed (`881da93`); a non-paging notice is open |
 | 5 | The failure was misleading: the fallback said numbers "appear once 30 days exist" | Honest cards that name the cause and the reset time | Fixed (`2ce05cd`, `5a2d6ce`) |
 | 6 | Ludo failed as a dead connection | "Ludo is napping" screen with the reset in the player's time; no retries until then | Fixed (`5a2d6ce`) |
-| 7 | The ledger missed 6 h 24 min of records | Backfill from Workers Logs as a standing rule (ADR-028); today's gap seeded | Fixed; today's replay pending |
+| 7 | The ledger missed 6 h 24 min of records | Backfill from Workers Logs as a standing rule (ADR-028); today's gap seeded | Fixed; replay ran and the gap closed by 05:17 UTC on 3 Oct. Exact restored count still to read from `op = ledger_backfill` lines |
 | 8 | The dashboard went dark although only writes were refused; testing showed Cloudflare refuses reads too once the write allowance is used up | Read copy of the window in KV, shown labelled when the ledger cannot be read (ADR-029) | Fixed |
+| 9 | Rebuilt readings are said to be "marked as backfilled", but the ledger keeps full records only for failed or slow events, so good rebuilt readings lose the mark (two marked entries for 2 Oct) | Store rebuilt counts per day and source, and show them on `/reliability/` | Open |
 
 ## Open
 
-- Record the backfill result after 00:00 UTC: `ledger:gap` gone, `op = ledger_backfill` lines, restored counts against the dry run (17 probe hits, 7 heartbeat runs, 29 page requests by 18:55).
+- Read the restored counts from the `op = ledger_backfill` lines (Cloudflare dashboard; logs keep 3 days, so before about 5 Oct) and compare them with the dry run (17 probe hits, 7 heartbeat runs, 29 page requests by 18:55). `ledger:gap` is already gone.
+- Finding 9.
 - Findings 2 and 4 (non-paging notice).

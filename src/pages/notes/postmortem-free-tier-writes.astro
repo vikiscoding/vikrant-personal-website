@@ -1,7 +1,7 @@
 ---
 // Public postmortem for the 2 Oct 2026 free-tier exhaustion. Prose is the owner's; facts trace to
-// docs/incidents/2026-10-02-free-tier-writes.md. Blameless; self-inflicted, and said so. The backfill result is
-// marked pending until it has run (no claim ahead of evidence).
+// docs/incidents/2026-10-02-free-tier-writes.md. Blameless; self-inflicted, and said so. Backfill facts are only
+// what /api/slo shows (no claim ahead of evidence): the exact restored count waits for the backfill log lines.
 import Base from "../../layouts/Base.astro";
 ---
 
@@ -33,7 +33,7 @@ import Base from "../../layouts/Base.astro";
     <div><dt>Time to explain</dt><dd>6 minutes after the cause was confirmed: the page said what was wrong</dd></div>
     <div><dt>Time to restore</dt><dd>The daily reset at 8:00 p.m.; the free tier has no earlier way back</dd></div>
     <div><dt>Error budget used</dt><dd>None. The outside probe's checks all passed; the heartbeat never failed</dd></div>
-    <div><dt>Data</dt><dd>Missed readings rebuilt from logs after the reset (result pending)</dd></div>
+    <div><dt>Data</dt><dd>Missed readings rebuilt from logs after the reset; 140 of the day's 144 scheduled runs are on record</dd></div>
   </dl>
 
   <h2>Timeline</h2>
@@ -97,7 +97,7 @@ import Base from "../../layouts/Base.astro";
       <tr><td>4</td><td>Detected by eye; nothing signalled the refused writes</td><td>The heartbeat notices refused writes and queues a rebuild (never a page)</td><td>Fixed; a quiet notice is open</td></tr>
       <tr><td>5</td><td>The empty page looked like a choice</td><td>Every affected place names the cause and the reset time</td><td>Fixed</td></tr>
       <tr><td>6</td><td>The game failed as a dead connection</td><td>A "Ludo is napping" screen with the reset in your own time</td><td>Fixed</td></tr>
-      <tr><td>7</td><td>Six and a half hours of readings missed</td><td>Rebuilt from logs after any outage, automatically, marked as backfilled</td><td>Fixed; today's result pending</td></tr>
+      <tr><td>7</td><td>Six and a half hours of readings missed</td><td>Rebuilt from logs after any outage, automatically, marked as backfilled</td><td>Fixed; the rebuild ran on 3 Oct</td></tr>
       <tr><td>8</td><td>The page went dark although only writes were refused; it turned out reads are refused too</td><td>A read copy of the 30-day records, refreshed every 10 minutes, shown with "Recording paused since…" when the store can't be read</td><td>Fixed</td></tr>
     </tbody>
   </table></div>
