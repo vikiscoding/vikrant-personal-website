@@ -107,6 +107,8 @@ function sloCard(win: SloWindow, source: "pulse" | "ticker"): string {
   const used = sum?.bad ?? 0;
   const left = allowed - used;
   const usedPct = Math.min(100, Math.round((used / allowed) * 100));
+  // The bar shows what is left, the same way the caption reads; overspent fills it in red.
+  const leftPct = left < 0 ? 100 : Math.max(0, Math.round((left / allowed) * 100));
   const state = !sum || sum.total === 0 ? "none" : left < 0 ? "bad" : usedPct >= 50 ? "warn" : "good";
   const big = sum && sum.total ? pct(sum.good / sum.total) : "—";
   const budgetText =
@@ -118,7 +120,7 @@ function sloCard(win: SloWindow, source: "pulse" | "ticker"): string {
     <p class="dash-big">${big}</p>
     <p class="dash-small dash-muted">${n(sum?.good ?? 0)} of ${n(sum?.total ?? 0)} checks good</p>
     <p class="dash-small">Objective: <strong>${+(target * 100).toFixed(2)}%</strong> over 30 days</p>
-    <div class="dash-bar" role="img" aria-label="Error budget ${usedPct}% used"><span style="width:${usedPct}%"></span></div>
+    <div class="dash-bar" role="img" aria-label="${left < 0 ? "Error budget overspent" : `Error budget ${leftPct}% left`}"><span style="width:${leftPct}%"></span></div>
     <p class="dash-small">Error budget: ${budgetText}</p>
     <p class="dash-small dash-muted">${EXPLAIN[source]}</p>
   </section>`;
@@ -151,6 +153,67 @@ function strip(days: DayRow[], now: number): string {
       <span data-state="good"></span>no failures <span data-state="warn"></span>some failures, objective met
       <span data-state="bad"></span>objective missed that day <span data-state="none"></span>no data
     </p>
+  </section>`;
+}
+
+/**
+ * Error budget burn-down: budget left at the end of each day of the window, per objective. Shown from the day the
+ * "Collecting data" banner names as the first full window (first recorded day + 30: 30 Oct 2026 here), by age rather
+ * than by days with data, so one empty day cannot hold it back. Before that, a half-empty chart would read as a trend
+ * that does not exist yet (no claim ahead of evidence). Drawn from the same daily rows as the strip; a day with no
+ * data breaks the line rather than being joined across.
+ */
+export function burnDown(days: DayRow[], now: number): string {
+  const keys = dayKeys(now);
+  const W = 300;
+  const H = 80;
+  const top = 4;
+  const bottom = H - 4;
+  const x = (i: number) => +((i * W) / (keys.length - 1)).toFixed(1);
+  const y = (r: number) => +(top + (1 - Math.max(0, Math.min(1, r))) * (bottom - top)).toFixed(1);
+  const series = (source: "pulse" | "ticker") => {
+    const allowed = Math.floor(EXPECTED[source] * (1 - TARGETS[source]));
+    let spent = 0;
+    const runs: string[][] = [[]];
+    keys.forEach((k, i) => {
+      const row = days.find((d) => d.day === k && d.source === source);
+      if (!row || row.total === 0) {
+        if (runs.at(-1)!.length) runs.push([]);
+        return;
+      }
+      spent += row.bad;
+      runs.at(-1)!.push(`${x(i)},${y((allowed - spent) / allowed)}`);
+    });
+    // A single point has no line to draw: a short tick keeps that day visible.
+    const paths = runs
+      .filter((r) => r.length)
+      .map((r) => (r.length === 1 ? `M${r[0]} h2` : `M${r.join(" L")}`))
+      .join(" ");
+    return { allowed, left: allowed - spent, paths };
+  };
+  const hb = series("pulse");
+  const job = series("ticker");
+  const words = (s: { allowed: number; left: number }) =>
+    s.left >= 0 ? `${n(s.left)} of ${n(s.allowed)} failures left` : `overspent by ${n(-s.left)} of ${n(s.allowed)}`;
+  const desc = `Heartbeat freshness: ${words(hb)}. Scheduled job success: ${words(job)}.`;
+  return `<section class="dash-section">
+    <h2>Error budget over the window</h2>
+    <figure class="dash-burn">
+      <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-labelledby="burn-title burn-desc">
+        <title id="burn-title">Error budget left at the end of each day, last 30 days</title>
+        <desc id="burn-desc">${esc(desc)}</desc>
+        <line x1="0" x2="${W}" y1="${top}" y2="${top}" class="burn-ref" vector-effect="non-scaling-stroke" />
+        <line x1="0" x2="${W}" y1="${bottom}" y2="${bottom}" class="burn-zero" vector-effect="non-scaling-stroke" />
+        <path d="${hb.paths}" class="burn-hb" vector-effect="non-scaling-stroke" />
+        <path d="${job.paths}" class="burn-job" vector-effect="non-scaling-stroke" />
+      </svg>
+      <p class="dash-strip-axis dash-small dash-muted"><span>${keys[0]}</span><span>today</span></p>
+      <figcaption class="dash-small">
+        <span class="burn-key burn-key-hb" aria-hidden="true"></span>Heartbeat freshness: ${words(hb)}
+        <span class="burn-key burn-key-job" aria-hidden="true"></span>Scheduled job success: ${words(job)}
+      </figcaption>
+      <p class="dash-small dash-muted">Top line: the full budget. Bottom line: all of it spent. A steep drop is a bad day; a gap is a day with no data.</p>
+    </figure>
   </section>`;
 }
 
@@ -404,6 +467,7 @@ export function renderDashboard(
     ${liveCard(pulse, now, desk)}
     <div class="dash-grid">${sloCard(win, "pulse")}${sloCard(win, "ticker")}</div>
     ${strip(win.days, now)}
+    ${firstDay && firstDay <= addDays(localDay(now), -WINDOW_DAYS) ? burnDown(win.days, now) : ""}
     ${speed(win.days, now)}
     ${failures(win.events)}
     ${incidentDesk(feed)}

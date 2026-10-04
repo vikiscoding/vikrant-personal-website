@@ -26,8 +26,10 @@ Engineering roadmap for vikrantsingh.fyi. Decisions are in [`docs/adr/`](adr/REA
 
 ## Next
 
-- [ ] **Confirm the 2 Oct backfill** after the reset, and close finding 7 in the postmortem.
+- [ ] **Read the 2 Oct backfill's restored count** from the `op = ledger_backfill` lines (before about 5 Oct, when the logs expire), and close finding 7.
 - [ ] **Isolate load testing from production capacity** (incident finding 2): a separate Cloudflare account for the dev Worker, or a paid plan, before any load test above ~40 rooms.
+- [ ] **First monthly reliability note, 30 Oct 2026.** A short public note per 30-day window: budget spent and why, what changed, what comes next. The decisions, not just the numbers. The first can record the burn-down chart as that window's change.
+- [ ] **Error budget burn-down goes live, 30 Oct 2026, on its own.** Built and merged early; `/reliability/` shows it only once the first full window is in (the same condition that retires the "Collecting data" banner). Check it on the day; nothing else on graphs until then.
 - [ ] **First 30-day SLO report, 30 Oct 2026.** Save the outside probe's 30-day uptime (SLO-1) and the ledger's scheduled-job success (SLO-2). Consider switching `DASHBOARD_MODE` to `auto`.
 - [ ] **Game day 2: fire the alert on purpose, recorded.** *Run 2 Oct 2026; record pending in `docs/gamedays/`.* Hold the fault until the outside monitor goes Down and alerts (about 40–45 min after the last good run), restore, then work the incident through the human gate. Proves the probe → alert → delivery path end to end (game day 1, finding 8). Prerequisite: the alert channel has space (finding 7).
 - [ ] **Pulse run break and restore.** After a few quiet days: deploy `FAULT=game_js_error`, watch the client-path block react, restore, and write it up.
