@@ -136,7 +136,8 @@ export async function checkCloudflare(token: string | undefined, account: string
   return { expiresAt: null, error: `cloudflare http ${last}` };
 }
 
-async function checkExpiries(env: Env): Promise<Checked[]> {
+/** Only these, when given: a retry re-checks what failed, not everything (the registry rate-limits, 4 Oct 2026). */
+async function checkExpiries(env: Env, only?: Set<string>): Promise<Checked[]> {
   const at = new Date().toISOString();
   const run = async (id: string, f: () => Promise<Omit<Checked, "id" | "checkedAt">>): Promise<Checked> => {
     try {
@@ -145,13 +146,32 @@ async function checkExpiries(env: Env): Promise<Checked[]> {
       return { id, expiresAt: null, error: e instanceof Error ? e.name : "check failed", checkedAt: at };
     }
   };
-  return Promise.all([
-    run("domain", checkDomain),
-    run("github_token", () => checkGithub(env.GITHUB_TOKEN, env.GITHUB_REPO)),
-    run("dispatch_token", () => checkGithub(env.INCIDENTS_DISPATCH_TOKEN, env.INCIDENTS_REPO)),
-    run("observability_token", () => checkCloudflare(env.CF_OBSERVABILITY_TOKEN, env.CF_ACCOUNT_ID)),
-    run("analytics_token", () => checkCloudflare(env.CF_ANALYTICS_TOKEN, env.CF_ACCOUNT_ID)),
-  ]);
+  const checks: [string, () => Promise<Omit<Checked, "id" | "checkedAt">>][] = [
+    ["domain", checkDomain],
+    ["github_token", () => checkGithub(env.GITHUB_TOKEN, env.GITHUB_REPO)],
+    ["dispatch_token", () => checkGithub(env.INCIDENTS_DISPATCH_TOKEN, env.INCIDENTS_REPO)],
+    ["observability_token", () => checkCloudflare(env.CF_OBSERVABILITY_TOKEN, env.CF_ACCOUNT_ID)],
+    ["analytics_token", () => checkCloudflare(env.CF_ANALYTICS_TOKEN, env.CF_ACCOUNT_ID)],
+  ];
+  return Promise.all(checks.filter(([id]) => !only || only.has(id)).map(([id, f]) => run(id, f)));
+}
+
+/** An issuer that was busy or slow, as opposed to an answer about the token itself (not set, rejected, revoked). */
+const TRANSIENT = /http (429|5\d\d)|Timeout|Abort|check failed/i;
+
+/**
+ * Fold new results into the old. A transient error never replaces a good reading: the last good date stays, with
+ * its own checked time, so it still turns "Couldn't check" once it is over 3 days old (STALE_MS). An answer about the
+ * token itself (not set, rejected) always replaces it.
+ */
+export function mergeChecks(prev: Checked[], next: Checked[], now = Date.now()): Checked[] {
+  const out = new Map(prev.map((c) => [c.id, c]));
+  for (const c of next) {
+    const old = out.get(c.id);
+    const keepOld = c.error && TRANSIENT.test(c.error) && old && !old.error && now - Date.parse(old.checkedAt) <= STALE_MS;
+    if (!keepOld) out.set(c.id, c);
+  }
+  return [...out.values()];
 }
 
 /** Today's (UTC) use of each daily allowance, for the whole account, from Cloudflare's analytics. */
@@ -195,18 +215,18 @@ export async function refreshLimits(env: Env): Promise<void> {
   try {
     const now = Date.now();
     const rec = (await env.PULSE.get<Record_>(KEY, "json")) ?? { expiries: [], expiriesAt: null, usage: null, usageAt: null };
-    // A check that failed (a token not set yet, an issuer that didn't answer) is retried every 30 minutes, so a fix
-    // shows within half an hour instead of up to a day later.
-    const expiryAge = rec.expiriesAt ? now - Date.parse(rec.expiriesAt) : Infinity;
-    const failed = rec.expiries.some((c) => c.error);
-    const expiriesDue = expiryAge >= EXPIRY_EVERY_MS || (failed && expiryAge >= USAGE_EVERY_MS);
+    // Everything is checked daily. A check that failed (a token not set yet, an issuer that didn't answer) is retried
+    // on its own every 30 minutes, so a fix shows within half an hour without re-asking the issuers that answered.
+    const fullDue = !rec.expiriesAt || now - Date.parse(rec.expiriesAt) >= EXPIRY_EVERY_MS;
+    const retry = new Set(rec.expiries.filter((c) => c.error && now - Date.parse(c.checkedAt) >= USAGE_EVERY_MS).map((c) => c.id));
+    const expiriesDue = fullDue || retry.size > 0;
     // The day's figures restart at 00:00 UTC: refresh then too, so the card never shows yesterday's total as today's.
     const newDay = rec.usageAt !== null && rec.usageAt.slice(0, 10) !== new Date(now).toISOString().slice(0, 10);
     const usageDue = !rec.usageAt || now - Date.parse(rec.usageAt) >= USAGE_EVERY_MS || newDay;
     if (!expiriesDue && !usageDue) return;
     if (expiriesDue) {
-      rec.expiries = await checkExpiries(env);
-      rec.expiriesAt = new Date().toISOString();
+      rec.expiries = mergeChecks(rec.expiries, await checkExpiries(env, fullDue ? undefined : retry), now);
+      if (fullDue) rec.expiriesAt = new Date().toISOString();
     }
     if (usageDue) {
       try {
