@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "astro dev",
     "build": "astro build",
-    "check": "astro check && tsc -p worker/tsconfig.json --noEmit",
+    "check": "astro check && tsc -p worker/tsconfig.json --noEmit && node scripts/check-dashboard.mjs",
     "preview": "npm run build && wrangler dev",
     "deploy": "npm run build && wrangler deploy"
   },

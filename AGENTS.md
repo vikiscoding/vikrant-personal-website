@@ -25,7 +25,7 @@ The owner's personal site (headline, proof items, résumé, contact) plus a smal
 | `worker/capacity.ts` | Free-tier capacity: detect refusals, the next reset time (pages say so plainly; never an incident) |
 | `worker/backfill.ts`, `worker/backfill-parse.ts` | Ledger backfill from Workers Logs after an outage (ADR-028); the parser is pure and unit-testable |
 | `worker/ludo/`, `src/pages/ludo.astro` | Ludo, the server-path latency testbed (ADR-026): `engine.ts` (pure, seeded rules), `room.ts` (one Durable Object per room), `route.ts` (WebSocket upgrade), `telemetry.ts` (event schema). Doc: `docs/ludo-telemetry.md` |
-| `scripts/` | Brand-asset generator |
+| `scripts/` | Brand-asset generator; `check-dashboard.mjs` (dashboard checks, run by `npm run check`) |
 | `docs/` | Status, roadmap, ADRs, SLOs, runbook, game days, incidents, templates |
 
 ## Rules
@@ -73,7 +73,7 @@ The owner's personal site (headline, proof items, résumé, contact) plus a smal
 npm install
 npm run dev       # Astro only, no Worker
 npm run preview   # build + wrangler dev (Worker, assets, pulse)
-npm run check     # astro check + Worker typecheck
+npm run check     # astro check + Worker typecheck + dashboard checks
 python scripts/make-brand-assets.py   # after a headline change
 # Deploy = push to main (CI/CD). `npm run deploy` is emergency-only.
 ```
