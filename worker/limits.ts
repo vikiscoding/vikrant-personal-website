@@ -83,6 +83,11 @@ interface CiReport {
   expiresAt: string | null;
   noExpiry: boolean;
   checkedAt: string;
+  /**
+   * The domain's expiry as the pipeline read it from the registry. The registries rate-limit Cloudflare's shared
+   * addresses (429 from both, 4 Oct 2026), so the Worker's own lookup can fail where GitHub's runners succeed.
+   */
+  domainExpiresAt?: string | null;
 }
 
 async function timed(url: string, init: RequestInit = {}): Promise<Response> {
@@ -109,11 +114,13 @@ const RDAP = ["https://rdap.identitydigital.services/rdap/domain/vikrantsingh.fy
 
 async function checkDomain(): Promise<Omit<Checked, "id" | "checkedAt">> {
   let res: Response | null = null;
+  const refused: string[] = [];
   for (const url of RDAP) {
     res = await timed(url, { headers: { accept: "application/rdap+json", ...UA } }).catch(() => null);
     if (res?.ok) break;
+    refused.push(`${new URL(url).hostname} ${res ? `http ${res.status}` : "unreachable"}`);
   }
-  if (!res?.ok) return { expiresAt: null, error: `registry http ${res?.status ?? "unreachable"}` };
+  if (!res?.ok) return { expiresAt: null, error: refused.join(", ") };
   const body = (await res.json()) as { events?: { eventAction?: string; eventDate?: string }[] };
   const exp = isoOrNull(body.events?.find((e) => e.eventAction === "expiration")?.eventDate);
   return exp ? { expiresAt: exp } : { expiresAt: null, error: "registry gave no expiry" };
@@ -228,11 +235,11 @@ export async function refreshLimits(env: Env): Promise<void> {
     // Everything is checked daily. A check that failed (a token not set yet, an issuer that didn't answer) is retried
     // on its own every 30 minutes, so a fix shows within half an hour without re-asking the issuers that answered.
     const fullDue = !rec.expiriesAt || now - Date.parse(rec.expiriesAt) >= EXPIRY_EVERY_MS;
-    const retry = new Set(rec.expiries.filter((c) => c.error && now - Date.parse(c.checkedAt) >= USAGE_EVERY_MS).map((c) => c.id));
+    const retry = new Set(rec.expiries.filter((c) => c.error && now - Date.parse(c.checkedAt) >= USAGE_EVERY_MS - 60_000).map((c) => c.id));
     const expiriesDue = fullDue || retry.size > 0;
     // The day's figures restart at 00:00 UTC: refresh then too, so the card never shows yesterday's total as today's.
     const newDay = rec.usageAt !== null && rec.usageAt.slice(0, 10) !== new Date(now).toISOString().slice(0, 10);
-    const usageDue = !rec.usageAt || now - Date.parse(rec.usageAt) >= USAGE_EVERY_MS || newDay;
+    const usageDue = !rec.usageAt || now - Date.parse(rec.usageAt) >= USAGE_EVERY_MS - 60_000 || newDay;
     if (!expiriesDue && !usageDue) return;
     if (expiriesDue) {
       rec.expiries = mergeChecks(rec.expiries, await checkExpiries(env, fullDue ? undefined : retry), now);
@@ -307,10 +314,15 @@ export async function readLimits(env: Env, now = Date.now()): Promise<LimitsView
   }
   const checked = new Map((rec?.expiries ?? []).map((c) => [c.id, c]));
   if (ci) checked.set("ci_token", { id: "ci_token", expiresAt: ci.expiresAt, noExpiry: ci.noExpiry, checkedAt: ci.checkedAt });
+  // The Worker's own domain lookup wins when it works; when it can't, the pipeline's daily reading stands in.
+  const own = checked.get("domain");
+  const viaCi = !!ci?.domainExpiresAt && (!own || !!own.error);
+  if (viaCi) checked.set("domain", { id: "domain", expiresAt: ci!.domainExpiresAt!, checkedAt: ci!.checkedAt });
   const expiries = ITEMS.map((it) => {
     const c = checked.get(it.id);
     const s = it.id === "ci_token" && !c ? { status: "missing" as const, status_text: "Not reported yet: the deploy pipeline reports it daily", days_left: null } : expiryStatus(c, now);
-    return { id: it.id, label: it.label, breaks: it.breaks, source: SOURCE_TEXT[it.source], expires_at: c?.expiresAt ?? null, checked_at: c?.checkedAt ?? null, ...s };
+    const source = it.id === "domain" && viaCi ? "domain registry, read by the deploy pipeline" : SOURCE_TEXT[it.source];
+    return { id: it.id, label: it.label, breaks: it.breaks, source, expires_at: c?.expiresAt ?? null, checked_at: c?.checkedAt ?? null, ...s };
   });
   const usage =
     rec?.usage && rec.usageAt && rec.usageAt.slice(0, 10) === new Date(now).toISOString().slice(0, 10)
@@ -362,11 +374,17 @@ async function ciReport(request: Request, env: Env, json: (b: unknown, s?: numbe
   } catch {
     return json({ error: "bad_json" }, 400);
   }
-  const b = body as { expires_at?: unknown; no_expiry?: unknown };
-  if (!body || typeof body !== "object" || typeof b.no_expiry !== "boolean" || (b.expires_at !== null && isoOrNull(b.expires_at) === null)) {
+  const b = body as { expires_at?: unknown; no_expiry?: unknown; domain_expires_at?: unknown };
+  const badDomain = b.domain_expires_at !== undefined && b.domain_expires_at !== null && isoOrNull(b.domain_expires_at) === null;
+  if (!body || typeof body !== "object" || typeof b.no_expiry !== "boolean" || (b.expires_at !== null && isoOrNull(b.expires_at) === null) || badDomain) {
     return json({ error: "bad_body" }, 400);
   }
-  const report: CiReport = { expiresAt: b.expires_at === null ? null : isoOrNull(b.expires_at), noExpiry: b.no_expiry, checkedAt: new Date().toISOString() };
+  const report: CiReport = {
+    expiresAt: b.expires_at === null ? null : isoOrNull(b.expires_at),
+    noExpiry: b.no_expiry,
+    checkedAt: new Date().toISOString(),
+    domainExpiresAt: isoOrNull(b.domain_expires_at),
+  };
   await env.PULSE.put(CI_KEY, JSON.stringify(report));
   return new Response(null, { status: 204 });
 }

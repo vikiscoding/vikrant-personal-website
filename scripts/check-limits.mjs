@@ -31,6 +31,18 @@ function levelFor(e) {
   }
 }
 
+/** The domain's expiry from the .fyi registry (rdap.org as fallback), read from GitHub's runner rather than from
+ *  Cloudflare, whose shared addresses the registries rate-limit. */
+async function readDomain() {
+  for (const url of ["https://rdap.identitydigital.services/rdap/domain/vikrantsingh.fyi", "https://rdap.org/domain/vikrantsingh.fyi"]) {
+    const r = await fetch(url, { headers: { accept: "application/rdap+json" }, signal: AbortSignal.timeout(10_000) }).catch(() => null);
+    if (!r?.ok) continue;
+    const exp = (await r.json()).events?.find((e) => e.eventAction === "expiration")?.eventDate;
+    if (exp) return new Date(exp).toISOString();
+  }
+  return null;
+}
+
 async function verifyCloudflare(token, account) {
   const paths = ["https://api.cloudflare.com/client/v4/user/tokens/verify"];
   if (account) paths.push(`https://api.cloudflare.com/client/v4/accounts/${account}/tokens/verify`);
@@ -74,6 +86,8 @@ async function main() {
   if (cf) {
     const ci = await verifyCloudflare(cf, process.env.CF_ACCOUNT_ID);
     console.log(`Cloudflare deploy token: ${ci ? (ci.expires_at ?? "no expiry set") : "could not verify"}`);
+    if (ci) ci.domain_expires_at = await readDomain();
+    console.log(`Domain (read from the registry by CI): ${ci?.domain_expires_at ?? "could not read"}`);
     if (ci && process.env.LIMITS_REPORT_TOKEN && !DRY) {
       const r = await fetch(`${SITE}/api/limits/ci`, {
         method: "POST",
