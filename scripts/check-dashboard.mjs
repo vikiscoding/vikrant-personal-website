@@ -166,6 +166,24 @@ check("merge: transient errors keep the last good date, real answers replace it,
   const other = { id: "github_token", expiresAt: "2027-08-30T04:00:00Z", checkedAt: "2026-10-04T20:30:00Z" };
   assert.deepEqual(mergeChecks([busy, other], [good], now).map((c) => c.id).sort(), ["domain", "github_token"]);
 });
+const { readLimits } = await import("../worker/limits.ts");
+{
+  const now = Date.parse("2026-10-04T23:45:00Z");
+  const kv = (rec, ci) => ({ PULSE: { get: async (k) => (k === "limits" ? rec : k === "limits:ci" ? ci : null) } });
+  const rec = (domain) => ({ expiries: [domain], expiriesAt: "2026-10-04T22:20:00Z", usage: null, usageAt: null });
+  const ci = { expiresAt: "2028-03-31T23:59:59Z", noExpiry: false, checkedAt: "2026-10-04T23:44:00Z", domainExpiresAt: "2027-09-29T23:31:29.531Z" };
+  const failed = { id: "domain", expiresAt: null, error: "rdap.identitydigital.services http 429", checkedAt: "2026-10-04T23:40:00Z" };
+  const fine = { id: "domain", expiresAt: "2027-09-29T23:31:29.531Z", checkedAt: "2026-10-04T23:40:00Z" };
+  const a = (await readLimits(kv(rec(failed), ci), now)).expiries.find((e) => e.id === "domain");
+  assert.equal(a.status, "ok");
+  assert.match(a.source, /read by the deploy pipeline/);
+  const b = (await readLimits(kv(rec(fine), ci), now)).expiries.find((e) => e.id === "domain");
+  assert.equal(b.source, "domain registry");
+  const c = (await readLimits(kv(rec(failed), { ...ci, domainExpiresAt: null }), now)).expiries.find((e) => e.id === "domain");
+  assert.equal(c.status, "unchecked");
+  console.log("ok - domain: the site's own lookup wins; when it fails, the pipeline's reading stands in");
+  passed++;
+}
 check("GitHub's token-expiry header is read in both of its formats", () => {
   assert.equal(parseGithubExpiry("2027-08-30 00:00:00 UTC"), "2027-08-30T00:00:00.000Z");
   assert.equal(parseGithubExpiry("2027-08-30 00:00:00 -0700"), "2027-08-30T07:00:00.000Z");
