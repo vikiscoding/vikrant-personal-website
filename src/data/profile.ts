@@ -37,12 +37,6 @@ export interface SiteNote {
 
 export const siteNotes: SiteNote[] = [
   {
-    title: "Dependencies we can see, and two we can't yet",
-    date: "2026-10-04",
-    claim: "If we can't read an expiry, we don't call it fine.",
-    href: "/notes/dependency-expiry-gaps/",
-  },
-  {
     title: "When a load test used up the day's database writes",
     date: "2026-10-02",
     claim: "The failure looked like a choice. The logs said otherwise.",
