@@ -151,6 +151,21 @@ check("expiry statuses: 90/30-day thresholds, expired, missing, stale, failed, n
   // A checker that stopped is not believed: an old "OK" turns into "couldn't check".
   assert.equal(expiryStatus({ id: "x", expiresAt: inDays(200), checkedAt: new Date(now - 4 * 86_400_000).toISOString() }, now).status, "unchecked");
 });
+const { mergeChecks } = await import("../worker/limits.ts");
+check("merge: transient errors keep the last good date, real answers replace it, stale goods expire", () => {
+  const now = Date.parse("2026-10-04T22:30:00Z");
+  const good = { id: "domain", expiresAt: "2027-09-29T23:31:29.531Z", checkedAt: "2026-10-04T20:30:00Z" };
+  const busy = { id: "domain", expiresAt: null, error: "registry http 429", checkedAt: "2026-10-04T22:20:00Z" };
+  assert.deepEqual(mergeChecks([good], [busy], now), [good]);
+  const unset = { id: "analytics_token", expiresAt: null, error: "not set", checkedAt: "2026-10-04T22:20:00Z" };
+  const okTok = { id: "analytics_token", expiresAt: "2027-10-04T00:00:00Z", checkedAt: "2026-10-04T20:30:00Z" };
+  assert.deepEqual(mergeChecks([okTok], [unset], now), [unset]);
+  const oldGood = { ...good, checkedAt: "2026-09-30T00:00:00Z" };
+  assert.deepEqual(mergeChecks([oldGood], [busy], now), [busy]);
+  // A retry of one item leaves the others as they were.
+  const other = { id: "github_token", expiresAt: "2027-08-30T04:00:00Z", checkedAt: "2026-10-04T20:30:00Z" };
+  assert.deepEqual(mergeChecks([busy, other], [good], now).map((c) => c.id).sort(), ["domain", "github_token"]);
+});
 check("GitHub's token-expiry header is read in both of its formats", () => {
   assert.equal(parseGithubExpiry("2027-08-30 00:00:00 UTC"), "2027-08-30T00:00:00.000Z");
   assert.equal(parseGithubExpiry("2027-08-30 00:00:00 -0700"), "2027-08-30T07:00:00.000Z");
