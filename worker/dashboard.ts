@@ -8,6 +8,7 @@ import { addDays, localDay, localStamp } from "./time";
 import type { Feed, FeedIncident } from "./incidents";
 import type { Gap } from "./backfill";
 import { nextReset } from "./capacity";
+import type { ExpiryStatus, LimitsView } from "./limits";
 
 export type DashboardMode = "off" | "auto" | "on";
 export const WINDOW_DAYS = 30;
@@ -214,6 +215,62 @@ export function burnDown(days: DayRow[], now: number): string {
       </figcaption>
       <p class="dash-small dash-muted">Top line: the full budget. Bottom line: all of it spent. A steep drop is a bad day; a gap is a day with no data.</p>
     </figure>
+  </section>`;
+}
+
+const LIMIT_STATE: Record<ExpiryStatus, "good" | "warn" | "bad" | "none"> = {
+  ok: "good",
+  none: "none",
+  due: "warn",
+  missing: "warn",
+  unchecked: "warn",
+  urgent: "bad",
+  expired: "bad",
+};
+const LIMIT_BADGE: Record<ExpiryStatus, string> = {
+  ok: "OK",
+  none: "NO EXPIRY",
+  due: "RENEW SOON",
+  missing: "NOT RECORDED",
+  unchecked: "UNCHECKED",
+  urgent: "RENEW NOW",
+  expired: "EXPIRED",
+};
+
+/**
+ * What could stop this site (ADR-030): every credential and renewal it depends on, and today's use of the free-tier
+ * allowances. A date nobody could read is shown as a risk, not as fine. Status is in words as well as colour.
+ */
+function limitsSection(v: LimitsView, now: number): string {
+  const rows = v.expiries
+    .map((e) => {
+      const state = LIMIT_STATE[e.status];
+      const when = e.expires_at ? longDay(localDay(e.expires_at)) : "—";
+      const how = e.checked_at ? `${esc(e.source)}, checked ${esc(ago(e.checked_at, now))}` : esc(e.source);
+      return `<li data-state="${state}">
+        <p class="dash-limit-head"><span class="dash-badge" data-state="${state}">${LIMIT_BADGE[e.status]}</span><strong>${esc(e.label)}</strong></p>
+        <p class="dash-small">${e.expires_at ? `Expires <strong>${esc(when)}</strong> · ` : ""}${esc(e.status_text)} <span class="dash-muted">(${how})</span></p>
+        <p class="dash-small dash-muted">If it lapses: ${esc(e.breaks)}</p>
+      </li>`;
+    })
+    .join("");
+  const meter = (share: number) => (share >= 0.8 ? "bad" : share >= 0.5 ? "warn" : "good");
+  const usage = v.usage
+    ? `<ul class="dash-usage">${v.usage.items
+        .map((u) => {
+          const pctNum = Math.min(100, Math.round(u.share * 100));
+          return `<li data-state="${meter(u.share)}"><p class="dash-small"><strong>${esc(u.label)}</strong>: ${n(u.used)} of ${n(u.limit)} <span class="dash-muted">(${pctNum}%)</span></p>
+          <div class="dash-meter" role="img" aria-label="${esc(u.label)}: ${pctNum}% of today's allowance used"><span style="width:${pctNum}%"></span></div></li>`;
+        })
+        .join("")}</ul>
+      <p class="dash-small dash-muted">As of ${esc(localStamp(v.usage.as_of).slice(11))}; resets at ${esc(localStamp(v.usage.resets_at).slice(11))} (00:00 UTC). Shared by every Worker on the account. Running out pauses the live numbers and Ludo until the reset, and says so; it is never an incident. Total storage isn't shown: Cloudflare's analytics give no storage figure for this account.</p>`
+    : `<p class="dash-small" data-state="warn"><span class="dash-badge" data-state="warn">NOT CONNECTED</span>${esc(v.usage_note ?? "No reading yet today.")}</p>`;
+  return `<section class="dash-section" id="limits">
+    <h2>What could stop this site</h2>
+    <p class="dash-small dash-muted">Everything this site depends on that expires, and what breaks if it does. Dates are read every day from the service that issued them; one that can't be read is shown as a risk, not as fine. Renewal reminders go to the owner at 90, 60 and 30 days.</p>
+    <ul class="dash-limits">${rows}</ul>
+    <h3 class="dash-sub">Today's free allowance</h3>
+    ${usage}
   </section>`;
 }
 
@@ -448,6 +505,7 @@ export function renderDashboard(
   now = Date.now(),
   gap: Gap | null = null,
   copy: { asOf: string; capacity: boolean } | null = null,
+  limits: LimitsView | null = null,
 ): string {
   const firstDay = win.days[0]?.day;
   const daysWithData = new Set(win.days.map((d) => d.day)).size;
@@ -466,6 +524,7 @@ export function renderDashboard(
     ${young}
     ${liveCard(pulse, now, desk)}
     <div class="dash-grid">${sloCard(win, "pulse")}${sloCard(win, "ticker")}</div>
+    ${limits ? limitsSection(limits, now) : ""}
     ${strip(win.days, now)}
     ${firstDay && firstDay <= addDays(localDay(now), -WINDOW_DAYS) ? burnDown(win.days, now) : ""}
     ${speed(win.days, now)}

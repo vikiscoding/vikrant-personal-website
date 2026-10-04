@@ -4,6 +4,7 @@ import { ludoApi } from "./ludo/route";
 import { rumApi } from "./rum";
 import { sloApi } from "./slo";
 import { runTicker } from "./ticker";
+import { limitsApi, refreshLimits } from "./limits";
 
 export { VisitCounter } from "./visits";
 export { SliLedger } from "./ledger";
@@ -24,6 +25,7 @@ export default {
     if (pathname === "/api/slo" && request.method === "GET") return sloApi(env, url);
     if (pathname === "/api/rum") return rumApi(request, env, ctx);
     if (pathname === "/api/ludo" && request.method === "GET") return ludoApi(request, env, ctx);
+    if (pathname === "/api/limits" || pathname === "/api/limits/ci") return limitsApi(request, env);
     if (pathname.startsWith("/api/")) {
       return new Response(JSON.stringify({ error: "not_found" }), {
         status: 404,
@@ -34,6 +36,8 @@ export default {
   },
 
   async scheduled(_controller, env, ctx): Promise<void> {
+    // Beside the scheduled job, never inside it: a limits check can never fail or slow a run (ADR-030).
+    ctx.waitUntil(refreshLimits(env));
     await runTicker(env, ctx);
   },
 } satisfies ExportedHandler<Env>;

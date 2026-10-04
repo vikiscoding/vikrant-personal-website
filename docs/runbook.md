@@ -40,11 +40,22 @@ SLO-1 for a 30-day window = the monitor's 30-day uptime %. Export or screenshot 
 - Manual test without breaking anything: engine repo → Actions → **site-alert** → Run workflow.
 - Desk state lives in KV `incident:state` (`failures`, `open`, `pending`). A stuck `pending` means the dispatch token is missing, expired or wrong: check the Worker secret `INCIDENTS_DISPATCH_TOKEN`.
 
+## Renewals and expiries
+
+Everything that can lapse is on `/reliability/#limits` ("What could stop this site", ADR-030) and in `GET /api/limits`. Dates are read from the issuer every day; the daily `limits` workflow keeps one GitHub issue per item, labelled `limits` and escalating P3 (90 days) → P2 (60) → P1 (30) → P0 (expired), and closes it once fixed. To renew: replace the token in the dashboard that holds it (Cloudflare or GitHub, never through an agent's `!` prompt); the next daily check reads the new date and closes the issue. To check now: run the `limits` workflow by hand (Actions → limits → Run workflow).
+
+- **One-time setup (owner, in the dashboards):**
+  1. Cloudflare → Workers & Pages → `vikrantsingh-fyi` → Settings → Variables and Secrets: add secret `LIMITS_REPORT_TOKEN` (a long random string) and secret `CF_ANALYTICS_TOKEN` (My Profile → API Tokens → Create: **Account → Account Analytics → Read**, this account only).
+  2. GitHub → this repo → Settings → Secrets and variables → Actions: add `LIMITS_REPORT_TOKEN` with the same value.
+  3. Run the `limits` workflow once by hand. The deploy token's row then shows its date, and the allowance figures appear within 30 minutes.
+- **"Couldn't check"** means the check itself failed (token not set, rejected, or the issuer did not answer) or is over 3 days old. Look at the reason on the card; Workers Logs show `op = "limits"` if the refresh failed.
+- **"Not recorded"** means a date nobody could read. Either the issuer does not give one, or the item is new: give it a way to be read, or record it.
+
 ## Scheduled incidents
 
 - **GitHub token expiry:** **Mon 30 Aug 2027** (fine-grained token `vikrant-personal-website-fgtoken`: this repo only; read Actions, Contents, Metadata). Renew by 23 Aug 2027: regenerate, then `npx wrangler secret put GITHUB_TOKEN`. If it lapses, every tick fails with `http 401` and `/api/pulse` goes stale 35 min later.
 - **Incident desk dispatch token expiry:** **Thu 30 Sep 2027** (Worker secret `INCIDENTS_DISPATCH_TOKEN`; fine-grained, engine repo only, Contents read and write). Renew by 23 Sep 2027 in the Cloudflare dashboard. If it lapses, alerts stay `pending` in KV `incident:state` and no incident opens (UptimeRobot still pages).
-- **Cloudflare API token expiry (CI/CD):** date `TODO`. When it expires, every deploy fails with an authentication error. Renew 7 days before: new token, same permissions, update the `CLOUDFLARE_API_TOKEN` repo secret, and re-run the last `ci-cd` workflow.
+- **Cloudflare API token expiry (CI/CD):** read and reported daily by the `limits` workflow (see Renewals and expiries); until its first run, unknown. When it expires, every deploy fails with an authentication error. Renew 7 days before: new token, same permissions, update the `CLOUDFLARE_API_TOKEN` repo secret, and re-run the last `ci-cd` workflow.
 
 ## Free-tier allowance used up
 

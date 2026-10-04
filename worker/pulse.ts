@@ -1,6 +1,7 @@
 // Read side of the heartbeat. Every page view and every probe reads the snapshot.
 // Page views degrade open (ADR-010): if KV fails, the static page still serves.
 import { isCapacity, nextReset, untilText } from "./capacity";
+import { readLimits } from "./limits";
 import { localStamp } from "./time";
 import type { Env } from "./env";
 import { activeFault } from "./faults";
@@ -110,14 +111,14 @@ async function dashboardHtml(env: Env): Promise<string | null> {
     if (!win) return unavailable();
     const daysWithData = new Set(win.days.map((d) => d.day)).size;
     if (mode === "auto" && daysWithData < WINDOW_DAYS) return null;
-    const [pulse, feed, desk, gap] = await Promise.all([readPulse(env).catch(() => null), readFeed(env), readDeskState(env), readGap(env)]);
-    return renderDashboard(win, pulse, feed, desk, Date.now(), gap);
+    const [pulse, feed, desk, gap, limits] = await Promise.all([readPulse(env).catch(() => null), readFeed(env), readDeskState(env), readGap(env), readLimits(env)]);
+    return renderDashboard(win, pulse, feed, desk, Date.now(), gap, null, limits);
   } catch (e) {
     // The ledger cannot be read (capacity or outage): show the last saved copy of the records, clearly labelled.
     const copy = await readSloCopy(env);
     if (copy) {
-      const [pulse, feed, desk, gap] = await Promise.all([readPulse(env).catch(() => null), readFeed(env), readDeskState(env), readGap(env)]);
-      return renderDashboard(copy.window, pulse, feed, desk, Date.now(), gap, { asOf: copy.saved_at, capacity: isCapacity(e) });
+      const [pulse, feed, desk, gap, limits] = await Promise.all([readPulse(env).catch(() => null), readFeed(env), readDeskState(env), readGap(env), readLimits(env)]);
+      return renderDashboard(copy.window, pulse, feed, desk, Date.now(), gap, { asOf: copy.saved_at, capacity: isCapacity(e) }, limits);
     }
     if (isCapacity(e)) return capacityCard();
     console.error(JSON.stringify({ v: 2, ts: new Date().toISOString(), op: "dashboard", outcome: "error", detail: e instanceof Error ? e.message : "render failed" }));

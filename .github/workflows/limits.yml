@@ -1,0 +1,33 @@
+# Daily limits check (ADR-030): what could stop the site, as escalating GitHub issues for the owner.
+# Reads the site's own GET /api/limits, and checks and reports the deploy token only CI holds. Never deploys.
+name: limits
+
+on:
+  schedule:
+    - cron: "17 13 * * *" # 13:17 UTC daily: 9:17 a.m. Toronto in summer
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: limits
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Check limits and update issues
+        run: node scripts/check-limits.mjs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          LIMITS_REPORT_TOKEN: ${{ secrets.LIMITS_REPORT_TOKEN }}
+          CF_ACCOUNT_ID: f5eb41ba3de98a5c231390202fc5a3e0

@@ -24,4 +24,9 @@ export interface Env {
    *  Observability permission, set in the Cloudflare dashboard. Without them a ledger gap waits instead of backfilling. */
   CF_ACCOUNT_ID?: string;
   CF_OBSERVABILITY_TOKEN?: string;
+  /** What could stop this site (ADR-030, worker/limits.ts): a read-only Account Analytics token for today's use of the
+   *  free-tier allowances, and the shared secret the deploy pipeline uses to report its own token's expiry. Both set in
+   *  the Cloudflare dashboard; the second also as a GitHub Actions secret. */
+  CF_ANALYTICS_TOKEN?: string;
+  LIMITS_REPORT_TOKEN?: string;
 }

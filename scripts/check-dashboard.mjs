@@ -107,4 +107,30 @@ check("the budget bar fills with what is left", () => {
   assert.match(html, /aria-label="Error budget 74% left"><span style="width:74%">/);
 });
 
+// What could stop this site (ADR-030): the thresholds the page and the reminder issues both depend on.
+const { expiryStatus, parseGithubExpiry } = await import("../worker/limits.ts");
+check("expiry statuses: 90/30-day thresholds, expired, missing, stale, failed, no expiry", () => {
+  const now = Date.parse("2026-10-04T12:00:00Z");
+  const at = new Date(now).toISOString();
+  const inDays = (d) => new Date(now + d * 86_400_000 + 3_600_000).toISOString();
+  const st = (c) => expiryStatus(c && { id: "x", checkedAt: at, ...c }, now).status;
+  assert.equal(st({ expiresAt: inDays(91) }), "ok");
+  assert.equal(st({ expiresAt: inDays(90) }), "due");
+  assert.equal(st({ expiresAt: inDays(31) }), "due");
+  assert.equal(st({ expiresAt: inDays(30) }), "urgent");
+  assert.equal(st({ expiresAt: inDays(-2) }), "expired");
+  assert.equal(st({ expiresAt: null }), "missing"); // nobody could read a date: a risk, never fine
+  assert.equal(st(undefined), "missing");
+  assert.equal(st({ expiresAt: null, noExpiry: true }), "none");
+  assert.equal(st({ expiresAt: null, error: "not set" }), "unchecked");
+  // A checker that stopped is not believed: an old "OK" turns into "couldn't check".
+  assert.equal(expiryStatus({ id: "x", expiresAt: inDays(200), checkedAt: new Date(now - 4 * 86_400_000).toISOString() }, now).status, "unchecked");
+});
+check("GitHub's token-expiry header is read in both of its formats", () => {
+  assert.equal(parseGithubExpiry("2027-08-30 00:00:00 UTC"), "2027-08-30T00:00:00.000Z");
+  assert.equal(parseGithubExpiry("2027-08-30 00:00:00 -0700"), "2027-08-30T07:00:00.000Z");
+  assert.equal(parseGithubExpiry(null), null);
+  assert.equal(parseGithubExpiry("soon"), null);
+});
+
 console.log(`${passed} dashboard checks passed`);
