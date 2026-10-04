@@ -34,11 +34,13 @@ const RATE_MAX = 40;
 const KEY = /^[a-f0-9]{16}$/;
 export interface ChatLine {
   id: number;
+  /** -1 for a line the room itself writes (a player taking over a bot's seat). */
   seat: number;
   /** The sender's name (or colour) when they wrote it. */
   name: string;
   text: string;
   at: number;
+  system?: true;
 }
 
 interface Meta {
@@ -59,6 +61,8 @@ interface Meta {
   /** The bot steps since the turn last left a human: one ludo_bot event when it reaches a human again. Kept in the
    *  state record (already written every step), so a room paused between alarms loses nothing. */
   botRun?: { steps: number; worst: number; late: number };
+  /** Seats just taken over from a bot, waiting for the newcomer's name before the room announces it. */
+  takeover?: number[];
 }
 
 /** Everything about a room except its move log, stored as ONE record. */
@@ -136,6 +140,32 @@ const FLUSH_AGE_MS = 20_000;
 /** Storage puts take at most 128 keys. */
 const PUT_CHUNK = 128;
 const logKey = (i: number) => `log:${String(i).padStart(6, "0")}`;
+
+/**
+ * The room has no seat left: four people are playing, or the bots' seats are all finished. Say so on a socket and
+ * close, rather than refuse the upgrade, which a browser can only report as a dead connection (and retry). Nobody
+ * already seated is ever moved to make room. The header tells the route to log it as "full".
+ */
+function fullSocket(reason: "full" | "over"): Response {
+  const pair = new WebSocketPair();
+  const [client, server] = [pair[0], pair[1]];
+  server.accept();
+  server.send(JSON.stringify({ t: "full", reason }));
+  server.close(4409, "full");
+  return new Response(null, { status: 101, webSocket: client, headers: { "x-ludo-result": "full" } });
+}
+
+/**
+ * A friends' game already in play: the seat a late joiner takes. Bots only, never one that has finished; a bot whose
+ * turn it is not comes first, so a newcomer does not land mid-move. Lowest seat breaks ties.
+ */
+function botSeatFor(g: Game): number {
+  const done = g.finished ?? [];
+  const open = g.seats.map((k, s) => (k === "bot" && !done.includes(s) ? s : -1)).filter((s) => s >= 0);
+  return open.find((s) => s !== g.turn) ?? open[0] ?? -1;
+}
+
+const COLOUR = ["Red", "Green", "Yellow", "Blue"];
 
 /** Answer an upgrade with a socket that only says "resting until <reset>" and closes (no storage needed). */
 export function restingSocket(): Response {
@@ -337,9 +367,20 @@ export class LudoRoom extends DurableObject<Env> {
     if (this.ctx.getWebSockets().length >= MAX_SOCKETS) return new Response("room busy", { status: 429 });
     let seat = m.keys.indexOf(key);
     if (seat < 0) {
+      // Late to a friends' game (owner's request, 4 Oct 2026): take over a bot's seat, its tokens as they stand.
+      const playing = g.phase === "roll" || g.phase === "move";
       if (m.mode === "solo") seat = m.keys[0] === null ? 0 : -1;
       else if (g.phase === "lobby") seat = g.seats.indexOf("empty");
-      if (seat < 0) return new Response("room full", { status: 409 });
+      else if (playing) seat = botSeatFor(g);
+      if (seat < 0) {
+        if (m.mode === "solo") return new Response("room full", { status: 409 });
+        return fullSocket(g.phase === "over" ? "over" : "full");
+      }
+      if (m.mode === "code" && playing) {
+        if (g.turn === seat) this.endBotRun(); // a run of bot turns ends when a person holds the seat
+        (m.names ??= [null, null, null, null])[seat] = null;
+        m.takeover = [...(m.takeover ?? []).filter((s) => s !== seat), seat];
+      }
       m.keys[seat] = key;
       if (m.mode === "code") g.seats[seat] = "human";
     }
@@ -425,6 +466,7 @@ export class LudoRoom extends DurableObject<Env> {
       const names = this.meta.names ?? [null, null, null, null];
       names[att.seat] = msg.name;
       this.meta.names = names;
+      this.announceTakeover(att.seat);
       await this.persistState();
       this.broadcast();
       return;
@@ -457,6 +499,7 @@ export class LudoRoom extends DurableObject<Env> {
       m.promptAt = t0;
       m.ended = false;
     } else {
+      this.announceTakeover(att.seat); // a page that never sent a name still gets announced, by colour
       const action: Action = msg.t === "roll" ? { seat: att.seat, kind: "roll" } : { seat: att.seat, kind: "move", token: msg.token };
       const think = g.turn === att.seat && m.promptAt ? t0 - m.promptAt : null;
       try {
@@ -610,6 +653,24 @@ export class LudoRoom extends DurableObject<Env> {
       // A human ran out of patience or left: an engagement signal, not a server fault.
       this.rec({ op: "ludo_turn", outcome: "degraded", status: 200, ms: t0 - promptAt, detail: detail({ mode: m.mode, result: "timeout", kind: action.kind }) });
     }
+  }
+
+  /**
+   * Tell the room a person has taken over a bot's seat, once, as a line in the room chat (the room's own words, so
+   * it stays in the room like any chat, never in telemetry). Waits for the newcomer's name, which their page sends
+   * right after connecting; their colour stands in if there is none.
+   */
+  private announceTakeover(seat: number): void {
+    const m = this.meta;
+    if (!m?.takeover?.includes(seat)) return;
+    m.takeover = m.takeover.filter((s) => s !== seat);
+    const colour = COLOUR[seat]!;
+    const who = m.names?.[seat];
+    const seq = (m.chatSeq ?? 0) + 1;
+    const line: ChatLine = { id: seq, seat: -1, name: "", text: who ? `${who} joined and took over ${colour} from the bot` : `A new player joined and took over ${colour} from the bot`, at: Date.now(), system: true };
+    m.chatSeq = seq;
+    m.chat = [...(m.chat ?? []), line].slice(-CHAT_KEEP);
+    for (const s of this.ctx.getWebSockets()) this.send(s, { t: "chat", lines: [line] });
   }
 
   /**

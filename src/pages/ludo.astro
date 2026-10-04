@@ -33,8 +33,9 @@ import Base from "../layouts/Base.astro";
     <div class="screen setup" data-view="setup">
       <div class="invited" data-invited hidden>
         <h2>You're invited to game <span data-invited-code></span></h2>
-        <p class="hint">Add your name and join. The game starts when four are in, or when someone starts it with bots.</p>
+        <p class="hint">Add your name and join. The game starts when four are in, or when someone starts it with bots. Already started? You take over a bot's seat.</p>
       </div>
+      <p class="notice" data-notice hidden role="status"></p>
       <label class="field">
         <span>Your name <em>(optional, shown to other players)</em></span>
         <input data-name maxlength="40" dir="auto" autocomplete="nickname" spellcheck="false" placeholder="e.g. Asha" />
@@ -318,6 +319,10 @@ import Base from "../layouts/Base.astro";
   :global(.msg.mine) { align-self: flex-end; }
   :global(.msg.mine .meta) { justify-content: flex-end; }
   :global(.msg.mine .bubble) { border-radius: 12px 12px 4px 12px; color: #fff; border-color: transparent; }
+  :global(.msg.system) { max-width: 100%; align-self: center; text-align: center; font-size: 0.8125rem; color: var(--muted); }
+  :global(.msg.system p) { margin: 0; }
+  .notice { margin: 0; padding: 0.6rem 0.8rem; border-radius: 8px; border: 1px solid var(--line); background: var(--surface, #f3f2ee); font-size: 0.9375rem; }
+  .notice[hidden] { display: none; }
   :global(.msgs .empty) { color: var(--muted); font-size: 0.8125rem; text-align: center; margin: auto 0; }
   .reacts { display: flex; gap: 0.3rem; flex-wrap: wrap; }
   .reacts button { min-height: 2.1rem; padding: 0.2rem 0.6rem; border-radius: 999px; font-size: 0.9375rem; }
@@ -435,6 +440,7 @@ import Base from "../layouts/Base.astro";
   const othersEl = $<HTMLElement>("[data-others]");
   const netEl = $<HTMLElement>("[data-net]");
   const leaveBtn = $<HTMLButtonElement>("[data-leave]");
+  const noticeEl = $<HTMLElement>("[data-notice]");
   const resetLocalEl = $<HTMLElement>("[data-reset-local]");
   const resetInEl = $<HTMLElement>("[data-reset-in]");
   const placesEl = $<HTMLOListElement>("[data-places]");
@@ -961,7 +967,8 @@ import Base from "../layouts/Base.astro";
   // ── Room chat (code rooms) ─────────────────────────────────────────────────────────
   // Text arrives already cleaned by the server (any language, no control or bidi-override characters). It is rendered
   // with textContent-safe escaping and dir="auto", so Arabic or Hebrew reads right to left inside a left-to-right page.
-  type ChatLine = { id: number; seat: number; name: string; text: string; at: number };
+  /** seat -1 and `system`: the room's own line (someone took over a bot's seat). */
+  type ChatLine = { id: number; seat: number; name: string; text: string; at: number; system?: true };
   const chatLines: ChatLine[] = [];
   let unread = 0;
   let sheetOpen = false;
@@ -1014,6 +1021,7 @@ import Base from "../layouts/Base.astro";
     msgsEl.innerHTML = chatLines.length
       ? chatLines
           .map((l) => {
+            if (l.system) return `<li class="msg system"><p dir="auto">${esc(l.text)} · ${esc(timeOf(l.at))}</p></li>`;
             const mine = l.seat === you;
             const colour = COLORS[l.seat] ?? "#888";
             return `<li class="msg${mine ? " mine" : ""}"><span class="meta"><i style="background:${colour}"></i><bdi>${esc(mine ? "You" : l.name)}</bdi> · ${esc(timeOf(l.at))}</span><p class="bubble" dir="auto"${
@@ -1039,7 +1047,7 @@ import Base from "../layouts/Base.astro";
       setUnread(unread + fresh);
       const last = chatLines.at(-1)!;
       const preview = [...last.text].slice(0, 40).join("");
-      toast(`${last.name}: ${preview}${[...last.text].length > 40 ? "…" : ""}`);
+      toast(last.system ? last.text : `${last.name}: ${preview}${[...last.text].length > 40 ? "…" : ""}`);
     }
   }
 
@@ -1124,6 +1132,7 @@ import Base from "../layouts/Base.astro";
     // Still resting: don't spend a connection (or the allowance) finding out again.
     if (Date.now() < restingUntil) return showResting(restingUntil);
     leaving = false;
+    noticeEl.hidden = true;
     room = r;
     prev = null;
     view = null;
@@ -1158,7 +1167,8 @@ import Base from "../layouts/Base.astro";
       pingSent = performance.now();
       send({ t: "ping" });
       const name = cleanName();
-      if (name) send({ t: "name", name });
+      // Always sent, even empty: a late joiner taking over a bot's seat is announced once the room has their name.
+      send({ t: "name", name: name || null });
       window.clearInterval(pingTimer);
       pingTimer = window.setInterval(() => {
         pingSent = performance.now();
@@ -1189,6 +1199,8 @@ import Base from "../layouts/Base.astro";
         }
         prev = before;
         render();
+      } else if (m.t === "full") {
+        showFull(m.reason === "over");
       } else if (m.t === "resting") {
         showResting(Number(m.resetAt));
       } else if (m.t === "chat") {
@@ -1209,7 +1221,7 @@ import Base from "../layouts/Base.astro";
     };
     ws.onclose = (e) => {
       window.clearInterval(pingTimer);
-      if (leaving || e.code === 1013) return; // left on purpose, or resting until the daily reset
+      if (leaving || e.code === 1013 || e.code === 4409) return; // left on purpose, resting until the reset, or full
       if (e.code === 1008 || retries >= 3) {
         statusEl.textContent = "Disconnected. Reload to rejoin.";
         return;
@@ -1247,6 +1259,33 @@ import Base from "../layouts/Base.astro";
     overEl.hidden = true;
     doneEl.hidden = true;
     setInvited(null); // back to the full menu, not the invite that brought them here
+    setScreen("setup");
+    placeChat();
+    try {
+      history.replaceState(history.state, "", "/ludo/");
+    } catch {
+      // Updating the address bar is a convenience only.
+    }
+  }
+
+  /** Every seat is taken by a person (or the bots left have finished): back to the start, with the reason. */
+  function showFull(over: boolean): void {
+    const code = room.slice(2);
+    leaving = true;
+    window.clearInterval(pingTimer);
+    view = null;
+    prev = null;
+    room = "";
+    chatLines.length = 0;
+    setSheet(false);
+    titleEl.textContent = "Ludo";
+    inviteBtn.hidden = true;
+    leaveBtn.hidden = true;
+    setInvited(null);
+    noticeEl.textContent = over
+      ? `Game ${code} has finished. Start your own game below.`
+      : `Game ${code} has no free seat: every seat is held by a player, or by a bot that has already finished. Start your own game below.`;
+    noticeEl.hidden = false;
     setScreen("setup");
     placeChat();
     try {

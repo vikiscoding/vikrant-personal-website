@@ -26,7 +26,8 @@ export async function ludoApi(request: Request, env: Env, ctx: ExecutionContext)
     const res = await env.LUDO.get(env.LUDO.idFromName(room)).fetch(request);
     // 4xx from the room (full, busy) is a correct answer, not a failure of the service.
     const outcome = res.status === 101 || res.status < 500 ? "ok" : "error";
-    const result = res.status === 101 ? "open" : res.status === 409 ? "full" : res.status === 429 ? "busy" : res.status < 500 ? "rejected" : "error";
+    const full = res.headers.get("x-ludo-result") === "full";
+    const result = full ? "full" : res.status === 101 ? "open" : res.status === 409 ? "full" : res.status === 429 ? "busy" : res.status < 500 ? "rejected" : "error";
     record(env, { op: "ludo_connect", outcome, status: res.status, ms: Date.now() - started, detail: detail({ mode: room.startsWith("s-") ? "solo" : "code", result }) }, ctx);
     return res;
   } catch (e) {
