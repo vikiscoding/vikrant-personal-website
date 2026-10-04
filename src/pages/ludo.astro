@@ -1200,7 +1200,7 @@ import Base from "../layouts/Base.astro";
         prev = before;
         render();
       } else if (m.t === "full") {
-        showFull(m.reason === "over");
+        showFull(m.reason === "ended" ? "ended" : m.reason === "over" ? "over" : "full");
       } else if (m.t === "resting") {
         showResting(Number(m.resetAt));
       } else if (m.t === "chat") {
@@ -1269,7 +1269,7 @@ import Base from "../layouts/Base.astro";
   }
 
   /** Every seat is taken by a person (or the bots left have finished): back to the start, with the reason. */
-  function showFull(over: boolean): void {
+  function showFull(reason: "full" | "over" | "ended"): void {
     const code = room.slice(2);
     leaving = true;
     window.clearInterval(pingTimer);
@@ -1282,9 +1282,12 @@ import Base from "../layouts/Base.astro";
     inviteBtn.hidden = true;
     leaveBtn.hidden = true;
     setInvited(null);
-    noticeEl.textContent = over
-      ? `Game ${code} has finished. Start your own game below.`
-      : `Game ${code} has no free seat: every seat is held by a player, or by a bot that has already finished. Start your own game below.`;
+    noticeEl.textContent =
+      reason === "ended"
+        ? `Game ${code} has ended: everyone who was playing left. Start a new game below, with friends or against the bots.`
+        : reason === "over"
+          ? `Game ${code} has finished. Start your own game below.`
+          : `Game ${code} has no free seat: every seat is held by a player, or by a bot that has already finished. Start your own game below.`;
     noticeEl.hidden = false;
     setScreen("setup");
     placeChat();

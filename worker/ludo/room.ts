@@ -20,6 +20,9 @@ export const ACTION_GOOD_MS = 100;
 export const RTT_GOOD_MS = 300;
 export const BOT_LAG_GOOD_MS = 250;
 export const LOBBY_GOOD_MS = 120_000;
+/** Everyone disconnected mid-game without pressing Leave (tabs closed, phones asleep): this long to come back, then
+ *  the game ends as if they had left (owner's call, 4 Oct 2026). Pressing Leave ends it at once. */
+export const EMPTY_GRACE_MS = 60_000;
 
 /** Room chat can carry 200 characters in any script; joined emoji and combining marks make that up to ~4 KB of JSON. */
 const MAX_MSG_BYTES = 4096;
@@ -63,6 +66,10 @@ interface Meta {
   botRun?: { steps: number; worst: number; late: number };
   /** Seats just taken over from a bot, waiting for the newcomer's name before the room announces it. */
   takeover?: number[];
+  /** When the last person disconnected mid-game; cleared when someone comes back within EMPTY_GRACE_MS. */
+  emptySince?: number;
+  /** The game ended because everyone left: the room keeps only this, and the link says the game has ended. */
+  closed?: { at: number; reason: "left" | "idle" };
 }
 
 /** Everything about a room except its move log, stored as ONE record. */
@@ -146,13 +153,13 @@ const logKey = (i: number) => `log:${String(i).padStart(6, "0")}`;
  * close, rather than refuse the upgrade, which a browser can only report as a dead connection (and retry). Nobody
  * already seated is ever moved to make room. The header tells the route to log it as "full".
  */
-function fullSocket(reason: "full" | "over"): Response {
+function fullSocket(reason: "full" | "over" | "ended"): Response {
   const pair = new WebSocketPair();
   const [client, server] = [pair[0], pair[1]];
   server.accept();
   server.send(JSON.stringify({ t: "full", reason }));
   server.close(4409, "full");
-  return new Response(null, { status: 101, webSocket: client, headers: { "x-ludo-result": "full" } });
+  return new Response(null, { status: 101, webSocket: client, headers: { "x-ludo-result": reason === "ended" ? "ended" : "full" } });
 }
 
 /**
@@ -353,6 +360,15 @@ export class LudoRoom extends DurableObject<Env> {
     if (!KEY.test(key)) return new Response("bad key", { status: 400 });
     await this.load();
     const now = Date.now();
+    if (this.meta?.closed) return fullSocket("ended");
+    if (this.meta?.emptySince !== undefined && this.game) {
+      // Back within the grace period: the game resumes. Too late (the alarm can run behind): it has ended.
+      if (now - this.meta.emptySince > EMPTY_GRACE_MS) {
+        await this.closeGame("idle");
+        return fullSocket("ended");
+      }
+      this.meta.emptySince = undefined;
+    }
 
     if (!this.game || !this.meta) {
       const mode = room.startsWith("s-") ? "solo" : "code";
@@ -538,7 +554,12 @@ export class LudoRoom extends DurableObject<Env> {
     await this.load();
     const g = this.game;
     const m = this.meta;
-    if (g && m && m.mode === "code" && g.seats[seat] === "human") {
+    const alone = this.ctx.getWebSockets().filter((s) => s !== ws).length === 0;
+    if (g && m && alone && (g.phase === "roll" || g.phase === "move")) {
+      // The last person in the room pressed Leave mid-game: end it now, rather than hand the seat to a bot and store
+      // a game nobody will finish (owner's call, 4 Oct 2026).
+      await this.closeGame("left");
+    } else if (g && m && m.mode === "code" && g.seats[seat] === "human") {
       const playing = g.phase === "roll" || g.phase === "move";
       const finished = (g.finished ?? []).includes(seat);
       if (g.phase === "lobby") g.seats[seat] = "empty";
@@ -621,6 +642,12 @@ export class LudoRoom extends DurableObject<Env> {
     if (this.tq.length && t0 - this.tqSince >= FLUSH_AGE_MS) this.flush();
     const g = this.game;
     const m = this.meta;
+    if (m?.emptySince !== undefined && this.ctx.getWebSockets().length === 0) {
+      // Nobody came back in time. (A woken room with no sockets plays no bot turns.)
+      if (t0 >= m.emptySince + EMPTY_GRACE_MS) await this.closeGame("idle");
+      else await this.ctx.storage.setAlarm(m.emptySince + EMPTY_GRACE_MS);
+      return;
+    }
     if (!g || !m || g.phase === "lobby" || g.phase === "over") return;
     const lag = m.due === null ? 0 : Math.max(0, t0 - m.due);
     const isBot = g.seats[g.turn] === "bot";
@@ -653,6 +680,46 @@ export class LudoRoom extends DurableObject<Env> {
       // A human ran out of patience or left: an engagement signal, not a server fault.
       this.rec({ op: "ludo_turn", outcome: "degraded", status: 200, ms: t0 - promptAt, detail: detail({ mode: m.mode, result: "timeout", kind: action.kind }) });
     }
+  }
+
+  /** The game's one ludo_game record, if it has not had one: "won" if anyone had finished, otherwise "abandoned". */
+  private recordGameEnd(g: Game, m: Meta): void {
+    if (g.phase === "over" || m.ended) return;
+    m.ended = true;
+    const won = (g.finished ?? []).length > 0;
+    this.rec({
+      op: "ludo_game",
+      outcome: won ? "ok" : "degraded",
+      status: 200,
+      ms: Date.now() - (m.startedAt ?? m.createdAt),
+      detail: detail({
+        mode: m.mode,
+        result: won ? "won" : "abandoned",
+        humans: g.seats.filter((k) => k === "human").length,
+        winner: won ? (g.seats[g.finished![0]!] ?? "unknown") : "none",
+        actions: g.log.length,
+      }),
+    });
+  }
+
+  /**
+   * Everyone has left a game in play: record it once and close the room for good. What stays is one small record
+   * saying it ended (names, chat, seat keys and the board are dropped), so the link can say so. The old move rows are
+   * left where they are: deleting them would cost a row written each, the budget this is meant to save.
+   */
+  private async closeGame(reason: "left" | "idle"): Promise<void> {
+    const g = this.game;
+    const m = this.meta;
+    if (!g || !m) return;
+    this.recordGameEnd(g, m);
+    this.endBotRun();
+    this.game = null;
+    this.meta = { mode: m.mode, keys: [null, null, null, null], createdAt: m.createdAt, startedAt: m.startedAt, turnStartedAt: m.turnStartedAt, due: null, ended: true, closed: { at: Date.now(), reason } };
+    await this.ctx.storage.deleteAlarm();
+    // One row: sending the telemetry already stores the (now closed) state; otherwise store it here.
+    const sends = this.tq.length > 0 && !!this.env.LEDGER;
+    this.flush();
+    if (!sends) await this.persistState();
   }
 
   /**
@@ -713,27 +780,16 @@ export class LudoRoom extends DurableObject<Env> {
     const m = this.meta;
     if (!g || !m) return;
     if (this.ctx.getWebSockets().filter((s) => s !== ws).length > 0) return;
+    if (g.phase === "roll" || g.phase === "move") {
+      // Mid-game and nobody left connected: hold the game for EMPTY_GRACE_MS, then end it (the alarm does).
+      m.emptySince = Date.now();
+      m.due = null;
+      await this.ctx.storage.setAlarm(m.emptySince + EMPTY_GRACE_MS);
+      await this.persistState();
+      return;
+    }
     if (g.phase === "lobby" && m.mode === "code") {
       this.rec({ op: "ludo_lobby", outcome: "degraded", status: 200, ms: Date.now() - m.createdAt, detail: detail({ result: "abandoned", humans: g.seats.filter((k) => k === "human").length, bots: 0 }) });
-    } else if (g.phase !== "over" && !m.ended && (g.finished ?? []).length > 0) {
-      // Everyone left after at least one player finished: the game had a winner, so it counts as completed.
-      m.ended = true;
-      this.rec({
-        op: "ludo_game",
-        outcome: "ok",
-        status: 200,
-        ms: Date.now() - (m.startedAt ?? m.createdAt),
-        detail: detail({ mode: m.mode, result: "won", humans: g.seats.filter((k) => k === "human").length, winner: g.seats[g.finished![0]!] ?? "unknown", actions: g.log.length }),
-      });
-    } else if (g.phase !== "over" && !m.ended) {
-      m.ended = true;
-      this.rec({
-        op: "ludo_game",
-        outcome: "degraded",
-        status: 200,
-        ms: Date.now() - (m.startedAt ?? m.createdAt),
-        detail: detail({ mode: m.mode, result: "abandoned", humans: g.seats.filter((k) => k === "human").length, winner: "none", actions: g.log.length }),
-      });
     }
     this.endBotRun(); // the room stops: an unfinished run of bot turns still counts
     m.due = null;

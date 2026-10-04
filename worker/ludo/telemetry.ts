@@ -6,7 +6,7 @@ export type Mode = "solo" | "code" | "unknown";
 
 /** The allowed detail keys for each op. Adding a key is a schema change: update the doc first. */
 export interface LudoDetail {
-  ludo_connect: { mode: Mode; result: "open" | "full" | "busy" | "rejected" | "error" | "capacity"; reason?: string };
+  ludo_connect: { mode: Mode; result: "open" | "full" | "ended" | "busy" | "rejected" | "error" | "capacity"; reason?: string };
   /** Human actions only (schema v2). Bot steps are summarised per run in ludo_bot. */
   ludo_action: { mode: Mode; kind: "roll" | "move" | "start" };
   /** One run of consecutive bot steps, ended when the turn reaches a human, the game ends or the room stops. */
