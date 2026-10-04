@@ -56,6 +56,26 @@ import Base from "../../layouts/Base.astro";
     </tbody>
   </table>
 
+  <h2>What it looked like</h2>
+  <p class="muted small">Screenshots taken at the time, on a phone and by a scheduled capture. Cropped, otherwise as they were.</p>
+  <div class="shots">
+    <figure>
+      <img src="/notes/free-tier-writes/paused-reliability-phone.jpg" width="720" height="996" loading="lazy" decoding="async"
+        alt="The Live reliability page on a phone. A banner reads: Live numbers are paused until the daily allowance resets. Nothing is broken. Today's free allowance of database writes is used up. It resets at 00:00 UTC (20:00 EDT), in about 2 min, and the numbers come back on their own." />
+      <figcaption class="small muted">7:58 p.m.: the reliability page names the cause and the reset time (finding 5).</figcaption>
+    </figure>
+    <figure>
+      <img src="/notes/free-tier-writes/ludo-napping-phone.jpg" width="720" height="1321" loading="lazy" decoding="async"
+        alt="The Ludo page on a phone, showing Ludo is napping. It's not you, and it's not the server. It's my wallet. The free allowance of database writes is used up. Back at 20:00 your time, in 2 min." />
+      <figcaption class="small muted">7:58 p.m.: the game says why it's resting and when it's back, instead of a dead connection (finding 6).</figcaption>
+    </figure>
+  </div>
+  <figure class="wide">
+    <img src="/notes/free-tier-writes/catching-up-reliability.jpg" width="720" height="880" loading="lazy" decoding="async"
+      alt="The Live reliability page after the reset. A banner reads: Catching up on readings since 2026-10-02 13:36 EDT; the readings are being rebuilt from the site's logs, half an hour at a time. Below it, the status is Operating normally and both objectives are within budget." />
+    <figcaption class="small muted">8:30 p.m., after the reset: missed readings are being rebuilt from the logs while everything else reads normal (finding 7). Nobody touched anything between this and the pictures above. One line overstates: only failed or slow rebuilt readings keep the "backfilled" mark (finding 9 in the raw record, open).</figcaption>
+  </figure>
+
   <h2>What went well</h2>
   <ul>
     <li>Degrade open held. Every page served, and the heartbeat and the outside monitor never noticed.</li>
@@ -145,4 +165,11 @@ import Base from "../../layouts/Base.astro";
   .scroll { overflow-x: auto; }
   .findings { min-width: 34rem; }
   .questions { padding-left: 1.3rem; display: grid; gap: 0.5rem; }
+  .shots { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: 1rem; align-items: start; margin: 1rem 0; }
+  figure { margin: 0; }
+  figure.wide { margin: 1rem 0 0; }
+  figure img { display: block; width: 100%; height: auto; border: 1px solid var(--line); border-radius: 10px; }
+  .shots img { max-width: 20rem; }
+  figure.wide img { max-width: 32rem; }
+  figcaption { margin-top: 0.4rem; }
 </style>

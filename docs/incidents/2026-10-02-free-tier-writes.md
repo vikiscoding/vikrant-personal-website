@@ -31,7 +31,7 @@ Raw record for the postmortem (template: `docs/templates/postmortem.md`; public 
 | ~19:05 | Today's gap seeded: `ledger:gap` = 17:36:19.792 to 00:00, mode `events` | KV |
 | 19:35 | Checked on the dev Worker: with writes exhausted, even `SELECT 1` and a read of `sqlite_master` are refused ("Exceeded allowed rows written"); reads are not possible | dev Workers Logs (`DIAG` lines) |
 | 19:45 | Read copy of the 30-day window in KV (`slo:last`), refreshed by every healthy run; dashboard and `/api/slo` fall back to it with "Recording paused since…" (ADR-029). Verified locally with `FAULT=ledger_read_fail` | branch `ledger-read-during-capacity` |
-| 00:00 (3 Oct) | Allowance resets; backfill replays the gap from Workers Logs, a slice per run | Page captures 00:30 to 01:41 UTC show "Catching up on readings" throughout (`2026-10-02-free-tier-writes-record/`, local) |
+| 00:00 (3 Oct) | Allowance resets; backfill replays the gap from Workers Logs, a slice per run | Page captures 00:30 to 01:41 UTC show "Catching up on readings" throughout (`2026-10-02-free-tier-writes-record/`, local). The 00:30 one, and two phone shots at 23:58 UTC (7:58 p.m. EDT: the paused reliability page and "Ludo is napping"), are on the public postmortem under "What it looked like" |
 | by 05:17 (3 Oct) | Gap closed: `/api/slo` reports no recording gap and the banner is gone. 2 Oct: 140 of 144 scheduled runs, 304 probe checks on record | `/api/slo?days=30` |
 
 Time to detect: minutes, by a person, not by a signal (finding 4). Time to mitigate the user-facing confusion: 6 min after confirmation (17:42 to 17:48). Time to restore: the 00:00 UTC reset (no earlier restore exists on the Free plan).
