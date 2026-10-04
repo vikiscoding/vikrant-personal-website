@@ -242,15 +242,19 @@ const LIMIT_BADGE: Record<ExpiryStatus, string> = {
  * allowances. A date nobody could read is shown as a risk, not as fine. Status is in words as well as colour.
  */
 function limitsSection(v: LimitsView, now: number): string {
-  const rows = v.expiries
+  const rank = (s: ExpiryStatus) => ["expired", "urgent", "due", "missing", "unchecked", "ok", "none"].indexOf(s);
+  const ordered = [...v.expiries].sort((a, b) => rank(a.status) - rank(b.status));
+  const rows = ordered
     .map((e) => {
       const state = LIMIT_STATE[e.status];
-      const when = e.expires_at ? longDay(localDay(e.expires_at)) : "—";
+      const calm = e.status === "ok" || e.status === "none";
+      const when = e.expires_at ? longDay(localDay(e.expires_at)) : null;
       const how = e.checked_at ? `${esc(e.source)}, checked ${esc(ago(e.checked_at, now))}` : esc(e.source);
+      const right = when ? `${esc(when)}${e.days_left !== null && e.days_left >= 0 ? ` <span class="dash-muted">· ${n(e.days_left)} days</span>` : ""}` : "";
       return `<li data-state="${state}">
-        <p class="dash-limit-head"><span class="dash-badge" data-state="${state}">${LIMIT_BADGE[e.status]}</span><strong>${esc(e.label)}</strong></p>
-        <p class="dash-small">${e.expires_at ? `Expires <strong>${esc(when)}</strong> · ` : ""}${esc(e.status_text)} <span class="dash-muted">(${how})</span></p>
-        <p class="dash-small dash-muted">If it lapses: ${esc(e.breaks)}</p>
+        <p class="dash-limit-head"><span class="dash-badge" data-state="${state}">${LIMIT_BADGE[e.status]}</span><strong>${esc(e.label)}</strong><span class="dash-limit-when">${right}</span></p>
+        ${calm ? `<p class="dash-small dash-muted">${how}</p>` : `<p class="dash-small">${esc(e.status_text)} <span class="dash-muted">(${how})</span></p>
+        <p class="dash-small dash-muted">If it lapses: ${esc(e.breaks)}</p>`}
       </li>`;
     })
     .join("");
@@ -286,41 +290,70 @@ function speed(days: DayRow[], now: number): string {
       return `<tr><th scope="row">${k}</th><td>${cell(t)}</td><td>${cell(p)}</td></tr>`;
     })
     .join("");
-  return `<section class="dash-section">
-    <h2>Speed</h2>
-    <p class="dash-small dash-muted">95% of runs were at least this fast. Times are rounded up to the nearest band (50, 100, 200, 400, 800, 1,600, 3,200 ms).</p>
+  return `<details class="dash-fold">
+    <summary>Speed by day <span class="dash-muted">· 95% of runs at least this fast</span></summary>
+    <p class="dash-small dash-muted">Times are rounded up to the nearest band (50, 100, 200, 400, 800, 1,600, 3,200 ms).</p>
     <table class="dash-table">
       <thead><tr><th scope="col">Day</th><th scope="col">Scheduled job <span class="dash-muted">(GitHub check)</span></th><th scope="col">Probe check <span class="dash-muted">(site's answer)</span></th></tr></thead>
       <tbody>${rows || `<tr><td colspan="3" class="dash-muted">No data yet.</td></tr>`}</tbody>
     </table>
-  </section>`;
+  </details>`;
 }
 
-function failures(events: EventRow[]): string {
-  // Ludo has its own SLIs (docs/ludo-telemetry.md); its events stay out of the site's failure list.
-  const server = events.filter((e) => e.source !== "game" && e.source !== "frame" && !e.source.startsWith("ludo_"));
-  const shown = server.filter((e) => e.outcome !== "ok").slice(0, 15);
-  const slow = server.filter((e) => e.outcome === "ok").length;
-  const items = shown
-    .map((e) => {
-      const gameDay = e.fault !== "none" ? ` <span class="dash-tag">game day</span>` : "";
-      const what = e.outcome === "degraded" ? "served without live status" : "failed";
-      return `<li><time datetime="${esc(e.ts)}">${esc(localStamp(e.ts))}</time>
+/** The site's own checks. Ludo and Pulse run have their own sections (docs/ludo-telemetry.md, ADR-015). */
+export const SITE_SOURCES = ["ticker", "pulse", "page"] as const;
+const isSite = (e: EventRow) => (SITE_SOURCES as readonly string[]).includes(e.source);
+
+function failureItem(e: EventRow): string {
+  const gameDay = e.fault !== "none" ? ` <span class="dash-tag">game day</span>` : "";
+  const what = e.outcome === "degraded" ? "served without live status" : "failed";
+  return `<li><time datetime="${esc(e.ts)}">${esc(localStamp(e.ts))}</time>
         <span><strong>${EVENT_LABEL[e.source]}</strong> ${what}: ${esc(e.detail || `HTTP ${e.status}`)}${
           e.dep !== "none" ? ` <span class="dash-muted">(cause: ${esc(e.dep)})</span>` : ""
         }${gameDay}</span></li>`;
-    })
-    .join("");
-  const more = server.filter((e) => e.outcome !== "ok").length - shown.length;
-  return `<section class="dash-section">
+}
+
+function failures(events: EventRow[]): string {
+  const server = events.filter(isSite);
+  const all = server.filter((e) => e.outcome !== "ok");
+  const shown = all.slice(0, 5);
+  const slow = server.filter((e) => e.outcome === "ok").length;
+  const more = all.length - shown.length;
+  return `<section class="dash-section" id="failures">
     <h2>Failures</h2>
-    ${
-      items
-        ? `<ol class="dash-events">${items}</ol>${more > 0 ? `<p class="dash-small dash-muted">and ${n(more)} more in the raw data.</p>` : ""}`
-        : `<p>No failures in the last 30 days.</p>`
-    }
+    ${shown.length ? `<ol class="dash-events">${shown.map(failureItem).join("")}</ol>` : `<p>No failures in the last 30 days.</p>`}
+    <p class="dash-small">${more > 0 ? `Showing the latest ${n(shown.length)} of ${n(all.length)} in the last 30 days. ` : ""}<a href="/reliability/failures/">Full failure history →</a></p>
     ${slow ? `<p class="dash-small dash-muted">${n(slow)} slow but successful run${slow === 1 ? "" : "s"} (over half the time budget) also recorded as early warnings.</p>` : ""}
   </section>`;
+}
+
+/**
+ * /reliability/failures/: every failure the ledger still keeps for the site's own checks, newest first, by day.
+ * Added 4 Oct 2026, when the dashboard's single 1,000-record read had let Ludo's records crowd game day 1 out of view.
+ */
+export function renderHistory(events: EventRow[], now = Date.now()): string {
+  const fails = events.filter((e) => isSite(e) && e.outcome !== "ok");
+  if (!fails.length) return `<div class="dash"><p>No failures recorded yet.</p></div>`;
+  const byDay = new Map<string, EventRow[]>();
+  for (const e of fails) {
+    const d = localDay(e.ts);
+    byDay.set(d, [...(byDay.get(d) ?? []), e]);
+  }
+  const days = [...byDay.entries()]
+    .map(([d, list]) => {
+      const planned = list.filter((e) => e.fault !== "none").length;
+      return `<section class="dash-section">
+      <h2>${esc(longDay(d))} <span class="dash-muted dash-count">· ${n(list.length)} failure${list.length === 1 ? "" : "s"}${planned ? `, ${n(planned)} on a game day` : ""}</span></h2>
+      <ol class="dash-events">${list.map(failureItem).join("")}</ol>
+    </section>`;
+    })
+    .join("");
+  const oldest = fails.at(-1)!.ts;
+  return `<div class="dash">
+    <p class="dash-summary" data-state="none"><strong>${n(fails.length)} failure${fails.length === 1 ? "" : "s"}</strong> on ${n(byDay.size)} day${byDay.size === 1 ? "" : "s"} · since ${esc(longDay(localDay(oldest)))}</p>
+    ${days}
+    <p class="dash-small dash-muted">The site keeps its detailed records for 400 days, up to 500 per check per day; daily totals are on <a href="/reliability/">Live reliability</a>. Times are Toronto time. Generated ${esc(localStamp(new Date(now).toISOString()))} · <a href="/api/slo?days=30">raw data (JSON)</a></p>
+  </div>`;
 }
 
 function clientPath(win: SloWindow): string {
@@ -336,13 +369,13 @@ function clientPath(win: SloWindow): string {
       </dl>`
     : `<p>No plays recorded yet. <a href="/play/">Be the first →</a></p>`;
   const errs = errors.length
-    ? `<ol class="dash-events">${errors
+    ? `<details class="dash-fold"><summary>Recent game errors <span class="dash-muted">· ${n(errors.length)}</span></summary><ol class="dash-events">${errors
         .map(
           (e) => `<li><time datetime="${esc(e.ts)}">${esc(localStamp(e.ts))}</time><span>${esc(e.detail)}${
             e.fault !== "none" ? ` <span class="dash-tag">game day</span>` : ""
           }</span></li>`,
         )
-        .join("")}</ol>`
+        .join("")}</ol></details>`
     : "";
   return `<section class="dash-card" data-state="none" id="client-path">
     <h2>Client path (<a href="/play/">Pulse run</a>)</h2>
@@ -391,11 +424,13 @@ function ludoSection(win: SloWindow): string {
       ${slo("ludo_bot", "Bots on pace", "every step ≤ 250 ms late, per run of bot turns")}
       ${slo("ludo_rtt", "Round trips fast", "≤ 300 ms")}
     </dl>
+    <details class="dash-fold"><summary>Engagement <span class="dash-muted">· games finished, lobbies, turn timeouts</span></summary>
     <dl class="dash-facts dash-client">
       <div><dt>Games finished</dt><dd>${share(games?.good ?? 0, games?.total ?? 0)}</dd><dd class="dash-small dash-muted">${n(games?.good ?? 0)} of ${n(games?.total ?? 0)} reached a winner</dd></div>
       <div><dt>Lobbies started</dt><dd>${share(lobby?.good ?? 0, lobby?.total ?? 0)}</dd><dd class="dash-small dash-muted">within 2 minutes · ${n(lobby?.total ?? 0)} code rooms</dd></div>
       <div><dt>Turns timed out</dt><dd>${share(turns?.bad ?? 0, turns?.total ?? 0)}</dd><dd class="dash-small dash-muted">30 s without a move${thinkToday === null ? "" : ` · median think ≤ ${n(thinkToday)} ms today`}</dd></div>
     </dl>
+    </details>
     <p class="dash-small"><a href="/ludo/">Add a data point: play Ludo →</a> · <a href="/api/slo?days=30">raw data</a></p>
   </section>`;
 }
@@ -421,9 +456,7 @@ function trail(i: FeedIncident): string {
 function incidentDesk(feed: Feed | null): string {
   const repo = feed?.repo ? `https://github.com/${esc(feed.repo)}` : null;
   const items = (feed?.incidents ?? []).slice(0, 5);
-  const list = items.length
-    ? `<ol class="dash-incidents">${items
-        .map((i) => {
+  const one = (i: FeedIncident) => {
           const state = OPEN.has(i.state) ? "bad" : "good";
           const title = i.issue_url ? `<a href="${esc(i.issue_url)}">${esc(i.title)}</a>` : esc(i.title);
           const proposal = i.triage
@@ -437,8 +470,14 @@ function incidentDesk(feed: Feed | null): string {
             ${i.note ? `<p class="dash-small">Owner's note: ${ownerNote(i.note)}</p>` : ""}
             <p class="dash-small">${esc(trail(i))}</p>
           </li>`;
-        })
-        .join("")}</ol>`
+  };
+  const [latest, ...earlier] = items;
+  const list = latest
+    ? `<ol class="dash-incidents">${one(latest)}</ol>${
+        earlier.length
+          ? `<details class="dash-fold"><summary>${n(earlier.length)} earlier incident${earlier.length === 1 ? "" : "s"}</summary><ol class="dash-incidents">${earlier.map(one).join("")}</ol></details>`
+          : ""
+      }`
     : `<p>No incidents yet. When this site's scheduled job fails twice in a row, the incident engine opens one here.</p>`;
   return `<section class="dash-card" data-state="none" id="incident-desk">
     <h2>Incident desk</h2>
@@ -473,7 +512,7 @@ function collecting(firstDay: string, now: number, paused = false): string {
   return `<section class="dash-collecting" aria-label="Data collection in progress">
     <p class="dash-collecting-head"><span class="dash-chip">Collecting data</span> Day ${n(day)} of ${WINDOW_DAYS}</p>
     <div class="dash-progress" role="progressbar" aria-label="First 30-day window" aria-valuemin="0" aria-valuemax="${WINDOW_DAYS}" aria-valuenow="${day}"><span style="width:${pct}%"></span></div>
-    <p class="dash-small">${paused ? "Every number below is a real reading, up to the pause above." : "Every number below is live and updates every few minutes."} A few days of readings are not yet a trend, though: the objectives, error budgets and 30-day strip become meaningful once the first full window is in, on <strong>${esc(longDay(complete))}</strong>. Until then, read them as early readings.</p>
+    <p class="dash-small">${paused ? "Real readings, up to the pause above." : "Live readings."} Early ones, though: the objectives, budgets and strip become meaningful once the first full window is in, on <strong>${esc(longDay(complete))}</strong>.</p>
   </section>`;
 }
 
@@ -518,6 +557,13 @@ export function renderDashboard(
   const status = !pulse ? "Status unavailable" : !fresh ? "Heartbeat late" : failing ? "Degraded" : "All checks normal";
   const summary = `<p class="dash-summary" data-state="${!fresh ? "bad" : failing ? "warn" : "good"}"><strong>${status}</strong> · ${
     openIncidents === 0 ? "no open incidents" : `${n(openIncidents)} open incident${openIncidents === 1 ? "" : "s"}`
+  }${
+    limits
+      ? (() => {
+          const risky = limits.expiries.filter((e) => e.status !== "ok" && e.status !== "none").length;
+          return risky ? ` · <a href="#limits">${n(risky)} dependenc${risky === 1 ? "y needs" : "ies need"} attention</a>` : " · dependencies OK";
+        })()
+      : ""
   } · data since ${esc(firstDay ?? "today")}</p>`;
   return `<div class="dash">
     ${summary}
@@ -525,16 +571,16 @@ export function renderDashboard(
     ${young}
     ${liveCard(pulse, now, desk)}
     <div class="dash-grid">${sloCard(win, "pulse")}${sloCard(win, "ticker")}</div>
-    ${limits ? limitsSection(limits, now) : ""}
     ${strip(win.days, now)}
     ${firstDay && firstDay <= addDays(localDay(now), -WINDOW_DAYS) ? burnDown(win.days, now) : ""}
     ${speed(win.days, now)}
     ${failures(win.events)}
+    ${limits ? limitsSection(limits, now) : ""}
     ${incidentDesk(feed)}
     ${clientPath(win)}
     ${ludoSection(win)}
-    <section class="dash-section">
-      <h2>How to read this</h2>
+    <details class="dash-fold dash-howto">
+      <summary>How to read this</summary>
       <ul class="dash-small">
         <li><strong>Objective (SLO):</strong> the share of checks that must succeed over 30 days.</li>
         <li><strong>Error budget:</strong> how many failures the objective allows in 30 days. Spending it is fine; overspending means reliability work comes before new features.</li>
@@ -542,7 +588,7 @@ export function renderDashboard(
         <li>All times and days are Toronto time (ET: EDT in summer, EST in winter).</li>
       </ul>
       ${traffic(win)}
-      <p class="dash-small dash-muted">Updated ${esc(localStamp(win.generated_at))} · <a href="/api/slo?days=30">raw data (JSON)</a></p>
-    </section>
+    </details>
+    <p class="dash-small dash-muted">Updated ${esc(localStamp(win.generated_at))} · <a href="/reliability/failures/">failure history</a> · <a href="/api/slo?days=30">raw data (JSON)</a> · <a href="/api/limits">dependencies (JSON)</a></p>
   </div>`;
 }

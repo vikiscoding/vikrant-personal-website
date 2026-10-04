@@ -1,0 +1,18 @@
+---
+// Reliability dashboard (ADR-013). The Worker fills [data-dashboard] from the SLI ledger when DASHBOARD_MODE allows.
+// Styles are global under .dash because the markup is injected at the edge, after Astro's scoped-style build.
+import Base from "../../layouts/Base.astro";
+import "../../styles/dashboard.css";
+---
+
+<Base title="Reliability · vikrantsingh.fyi" description="Live service level objectives, error budgets and failures for vikrantsingh.fyi.">
+  <p><a href="/notes/how-this-site-is-run/">← How this site is run</a></p>
+  <h1>Reliability</h1>
+  <p>
+    This site runs one small scheduled job and is checked from outside every 5 minutes. Below is how that is going,
+    straight from its own records.
+  </p>
+  <div data-dashboard>
+    <p class="dash-note">Reliability data is being collected. The live numbers appear here once the first 30-day window is complete.</p>
+  </div>
+</Base>

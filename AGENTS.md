@@ -11,7 +11,7 @@ The owner's personal site (headline, proof items, résumé, contact) plus a smal
 | Path | Holds |
 | --- | --- |
 | `src/data/profile.ts` | All site copy. The only place to edit words. |
-| `src/pages/` | `index`, `reliability` (dashboard), `play` (Pulse run), `ludo`, `notes/` (Writing, how-this-site-is-run, postmortems), `exhibits/*`, `privacy` |
+| `src/pages/` | `index`, `reliability/` (dashboard, and `failures` for the full failure history; shared styles in `src/styles/dashboard.css`), `play` (Pulse run), `ludo`, `notes/` (Writing, how-this-site-is-run, postmortems), `exhibits/*`, `privacy` |
 | `src/layouts/Base.astro` | Shell, nav and wordmark, share tags, and the footer `[data-pulse]` slot |
 | `worker/index.ts` | Routes: `/api/pulse`, `/api/slo`, `/api/rum`, `/api/ludo`, pages, cron |
 | `worker/ticker.ts` | Cron: GitHub → KV snapshot, then the incident-desk signal |

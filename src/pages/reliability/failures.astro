@@ -1,0 +1,18 @@
+---
+// Full failure history (redesign of 4 Oct 2026): every failure the SLI ledger still keeps for the site's own checks,
+// newest first, grouped by day. The Worker fills [data-dashboard] from the ledger; the dashboard shows only the latest.
+import Base from "../../layouts/Base.astro";
+import "../../styles/dashboard.css";
+---
+
+<Base title="Failure history · vikrantsingh.fyi" description="Every failure this site's own checks have recorded, newest first, with game days marked.">
+  <p><a href="/reliability/">← Live reliability</a></p>
+  <h1>Failure history</h1>
+  <p>
+    Every failure the site's own checks have recorded, newest first: the scheduled job, the heartbeat and page
+    requests. Planned game days are marked. The games' own records are on <a href="/reliability/#ludo">Live reliability</a>.
+  </p>
+  <div data-dashboard>
+    <p class="dash-note">The failure history is read from the site's records when the page is served.</p>
+  </div>
+</Base>

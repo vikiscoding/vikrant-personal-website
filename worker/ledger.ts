@@ -37,6 +37,8 @@ const MAX_EVENTS_PER_DAY = 500;
 /** Cap on new game sessions per day: /api/rum is public and spoofable (ADR-015). */
 const MAX_SESSIONS_PER_DAY = 5_000;
 const KEEP_DAYS = 400;
+/** Detailed records returned per source with a window. */
+const EVENTS_PER_SOURCE = 200;
 
 export function ledgerSource(op: SliEvent["op"]): ServerSource | null {
   if (op === "ticker") return "ticker";
@@ -282,6 +284,32 @@ export class SliLedger extends DurableObject<Env> {
     }
   }
 
+  /**
+   * Every detailed record the ledger still keeps (KEEP_DAYS) for the given sources, newest first: the full failure
+   * history page. Bounded by the daily detail cap, so it can't grow without limit.
+   */
+  history(sources: string[], limit = 3_000): EventRow[] {
+    const allowed = sources.filter((s) => /^[a-z_]+$/.test(s));
+    if (!allowed.length) return [];
+    return this.ctx.storage.sql
+      .exec<Record<string, string | number>>(
+        `SELECT ts, source, outcome, status, ms, dep, detail, fault FROM events WHERE source IN (${allowed.map(() => "?").join(",")}) ORDER BY ts DESC LIMIT ?`,
+        ...allowed,
+        limit,
+      )
+      .toArray()
+      .map((r) => ({
+        ts: String(r.ts),
+        source: String(r.source) as LedgerSource,
+        outcome: String(r.outcome),
+        status: Number(r.status),
+        ms: Number(r.ms),
+        dep: String(r.dep),
+        detail: String(r.detail),
+        fault: String(r.fault),
+      }));
+  }
+
   /** The last `days` Toronto calendar days, oldest first, plus their detailed events (newest first) and the game summary. */
   read(days: number): { days: DayRow[]; events: EventRow[]; game: GameSummary } {
     const sql = this.ctx.storage.sql;
@@ -313,10 +341,15 @@ export class SliLedger extends DurableObject<Env> {
         max_ms: Number(r.max_ms),
       };
     });
+    // Newest first, but capped per source: one cap across all sources let Ludo's think-time and round-trip records
+    // crowd the site's own failures (game day 1, the 2 Oct outage) out of the window (found 4 Oct 2026).
     const events: EventRow[] = sql
       .exec<Record<string, string | number>>(
-        `SELECT ts, source, outcome, status, ms, dep, detail, fault FROM events WHERE day >= ? ORDER BY ts DESC LIMIT 1000`,
+        `SELECT ts, source, outcome, status, ms, dep, detail, fault FROM (
+           SELECT *, ROW_NUMBER() OVER (PARTITION BY source ORDER BY ts DESC) AS rn FROM events WHERE day >= ?
+         ) WHERE rn <= ? ORDER BY ts DESC`,
         from,
+        EVENTS_PER_SOURCE,
       )
       .toArray()
       .map((r) => ({

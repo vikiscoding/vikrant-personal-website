@@ -8,7 +8,7 @@ import { activeFault } from "./faults";
 import { DepError, record } from "./log";
 import { SNAPSHOT_KEY, type Snapshot } from "./ticker";
 import { countVisit, isCountable, visitsText } from "./visits";
-import { dashboardMode, renderDashboard, WINDOW_DAYS } from "./dashboard";
+import { dashboardMode, renderDashboard, renderHistory, SITE_SOURCES, WINDOW_DAYS } from "./dashboard";
 import { readSloCopy, readWindow } from "./slo";
 import { readDeskState, readFeed } from "./incidents";
 import { readGap } from "./backfill";
@@ -126,6 +126,18 @@ async function dashboardHtml(env: Env): Promise<string | null> {
   }
 }
 
+/** The full failure history (/reliability/failures/). Degrades open: on any error the page keeps its static note. */
+async function historyHtml(env: Env): Promise<string | null> {
+  if (dashboardMode(env) === "off" || !env.LEDGER) return null;
+  try {
+    const events = await env.LEDGER.get(env.LEDGER.idFromName("sli")).history([...SITE_SOURCES]);
+    return renderHistory(events);
+  } catch (e) {
+    if (isCapacity(e)) return capacityCard();
+    return `<div class="dash"><p class="dash-note">The failure history can't be read right now. The site itself is serving; try again in a few minutes.</p></div>`;
+  }
+}
+
 /** The records are fine, but today's free-tier allowance is used up: say exactly that, and when it comes back. */
 function capacityCard(): string {
   const at = nextReset();
@@ -173,7 +185,7 @@ export async function servePage(request: Request, env: Env, ctx?: ExecutionConte
     isCountable(request, page.status) ? countVisit(env) : Promise.resolve(null),
   ]);
   const visits = visitsText(env, total);
-  const dashboard = path.startsWith("/reliability") ? await dashboardHtml(env) : null;
+  const dashboard = path.startsWith("/reliability/failures") ? await historyHtml(env) : path.startsWith("/reliability") ? await dashboardHtml(env) : null;
 
   record(env, {
     op: "page",

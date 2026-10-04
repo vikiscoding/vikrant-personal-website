@@ -107,6 +107,31 @@ check("the budget bar fills with what is left", () => {
   assert.match(html, /aria-label="Error budget 74% left"><span style="width:74%">/);
 });
 
+// The failure list shows the latest 10 and always links to the full history; the history groups every failure by day.
+const { renderHistory } = await import("../worker/dashboard.ts");
+const fail = (ts, source = "ticker", fault = "none") => ({ ts, source, outcome: "error", status: 504, ms: 5000, dep: "github", detail: "TimeoutError", fault });
+check("failures: latest 5 shown, the rest counted, full history linked", () => {
+  const now = Date.parse("2026-11-10T16:00:00Z");
+  const w = window(now, 30);
+  w.events = Array.from({ length: 14 }, (_, i) => fail(new Date(now - i * 3_600_000).toISOString()));
+  const html = render(w, now);
+  const section = html.slice(html.indexOf('id="failures"'), html.indexOf("</section>", html.indexOf('id="failures"')));
+  assert.equal((section.match(/<li>/g) ?? []).length, 5);
+  assert.match(section, /Showing the latest 5 of 14/);
+  assert.match(section, /href="\/reliability\/failures\/"/);
+});
+check("history: every site failure, grouped by Toronto day, game days counted, games' records left out", () => {
+  const html = renderHistory([
+    fail("2026-10-03T22:10:35Z"),
+    fail("2026-10-02T05:06:00Z", "pulse", "github_5xx"),
+    fail("2026-10-02T04:40:00Z", "ticker", "github_5xx"),
+    { ...fail("2026-10-02T04:00:00Z", "ludo_turn"), outcome: "degraded" },
+  ], Date.parse("2026-10-04T12:00:00Z"));
+  assert.match(html, /3 failures<\/strong> on 2 days/);
+  assert.match(html, /2 Oct 2026 <span[^>]*>· 2 failures, 2 on a game day/);
+  assert.doesNotMatch(html, /Ludo/);
+});
+
 // What could stop this site (ADR-030): the thresholds the page and the reminder issues both depend on.
 const { expiryStatus, parseGithubExpiry } = await import("../worker/limits.ts");
 check("expiry statuses: 90/30-day thresholds, expired, missing, stale, failed, no expiry", () => {
