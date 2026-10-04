@@ -269,6 +269,7 @@ function limitsSection(v: LimitsView, now: number): string {
     <h2>What could stop this site</h2>
     <p class="dash-small dash-muted">Everything this site depends on that expires, and what breaks if it does. Dates are read every day from the service that issued them; one that can't be read is shown as a risk, not as fine. Renewal reminders go to the owner at 90, 60 and 30 days.</p>
     <ul class="dash-limits">${rows}</ul>
+    <p class="dash-small"><a href="/notes/dependency-expiry-gaps/">Why unknowns stay visible →</a></p>
     <h3 class="dash-sub">Today's free allowance</h3>
     ${usage}
   </section>`;

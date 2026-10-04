@@ -1,0 +1,120 @@
+---
+// Site note: the dependency board's two open gaps (ADR-030), written while they are open. States and dates are
+// copied from GET /api/limits on 4 Oct 2026 at 21:58 UTC; when a gap closes, add a dated line under "Updates" and
+// change the finding's status. Never rewrite what the note said on the day. Not an incident: nothing here paged.
+import Base from "../../layouts/Base.astro";
+---
+
+<Base
+  title="Dependencies we can see, and two we can't yet · vikrantsingh.fyi"
+  description="This site lists every credential and registration that can take it down. Two entries still can't be checked, and the page says so instead of showing them as fine."
+>
+  <p class="kicker"><time datetime="2026-10-04">4 October 2026</time> · Open risk, not an incident</p>
+  <h1>Dependencies we can see, and two we can't yet</h1>
+  <p class="deck">
+    This site lists every credential and registration that can take it down. Two entries still can't be checked.
+    That's the point of this note.
+  </p>
+
+  <h2>Updates</h2>
+  <ul class="updates">
+    <li><time datetime="2026-10-04">4 Oct 2026</time>: written with both gaps open.</li>
+  </ul>
+
+  <h2>Summary</h2>
+  <p>
+    The <a href="/reliability/#limits">dependency board</a> on the reliability page lists everything this site depends
+    on that expires, and what breaks if it does, so each one is renewed before anyone feels it. Every day it reads each
+    expiry from the service that issued it. Four entries are green: the domain, the scheduled job's GitHub token, the
+    incident desk token and the log backfill token. Two are not. The usage feed token isn't set, so its row says
+    "Unchecked" and today's free-tier allowance says "Not connected". The Cloudflare deploy token's expiry hasn't been
+    reported yet, so its row says "Not recorded".
+  </p>
+  <p>
+    Neither gap stops the site today, and neither is an incident. Left alone, each is a P3 risk, and the daily check
+    will open a P3 reminder for it. Done means the usage feed is connected and its figures are live, and the deploy
+    pipeline reports its token's expiry every day.
+  </p>
+
+  <h2>Why this sits on the reliability page</h2>
+  <p>
+    Objectives answer one question: is the site meeting its targets? They can't answer another: what will stop it
+    while the outside probe is still green? On 2 October the site <a href="/notes/postmortem-free-tier-writes/">ran out
+    of its daily database writes</a>. The limit was real and published, but nothing on the page showed it coming. The
+    dependency board is the answer to that: list what can lapse, read its date, and say plainly when a date can't be
+    read.
+  </p>
+
+  <h2>Current state</h2>
+  <p class="muted small">Copied from the live board on 4 October 2026, 5:58 p.m. Toronto time.</p>
+  <div class="scroll"><table class="findings">
+    <thead><tr><th scope="col">Dependency</th><th scope="col">State</th><th scope="col">If it lapses</th><th scope="col">On the page</th></tr></thead>
+    <tbody>
+      <tr><td>Domain vikrantsingh.fyi</td><td>Expires 29 Sep 2027</td><td>The site goes offline</td><td>OK, from the domain registry</td></tr>
+      <tr><td>GitHub token (scheduled job)</td><td>Expires 30 Aug 2027</td><td>Every run fails, the heartbeat goes stale and the outside monitor alerts</td><td>OK, read from GitHub</td></tr>
+      <tr><td>Incident desk token</td><td>Expires 30 Sep 2027</td><td>Failures stop reaching the incident desk; the outside monitor still alerts</td><td>OK, read from GitHub</td></tr>
+      <tr><td>Log backfill token</td><td>Expires 31 Oct 2027</td><td>Readings missed in an outage wait instead of being rebuilt</td><td>OK, read from Cloudflare</td></tr>
+      <tr><td>Usage feed token</td><td>Not set</td><td>The allowance figures stop updating</td><td>Unchecked; allowance not connected</td></tr>
+      <tr><td>Cloudflare deploy token</td><td>Not reported yet</td><td>Deploys fail; the live site keeps running</td><td>Not recorded</td></tr>
+    </tbody>
+  </table></div>
+
+  <h2>Blast radius and severity</h2>
+  <p>
+    <strong>Usage feed missing.</strong> Visitors are served and the probe stays green, but I can't see how much of the
+    day's free allowance is used. That's the same class of failure as the write-budget outage: a limit I can't see
+    until it stops something. Priority: a scheduled fix this week, not a page.
+  </p>
+  <p>
+    <strong>Deploy token not reported.</strong> The only risk is that a deploy fails on the day the token expires,
+    without warning. The live site keeps running either way. Priority: pipeline hygiene.
+  </p>
+  <p>
+    The rule both follow: an expiry nobody could read is shown as a risk, never as OK. Each dependency gets a reminder
+    at 90, 60 and 30 days, with priority rising as the date nears.
+  </p>
+
+  <h2>Findings and actions</h2>
+  <div class="scroll"><table class="findings">
+    <thead><tr><th scope="col">#</th><th scope="col">Finding</th><th scope="col">Action</th><th scope="col">Status</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>The usage feed token isn't set</td><td>Add a read-only analytics token, so today's allowance is shown and its expiry is read</td><td>Open (owner)</td></tr>
+      <tr><td>2</td><td>The deploy token's expiry isn't reported</td><td>Add the report secret, then run the daily check once, so the pipeline reports the date every day</td><td>Open (owner)</td></tr>
+      <tr><td>3</td><td>The gap was visible on the page but not written down</td><td>This note, linked from the board</td><td>Done</td></tr>
+    </tbody>
+  </table></div>
+
+  <h2>What happens next</h2>
+  <p>
+    I'll close both gaps this week, and record each one under "Updates" above, with the date it turned green. If I ever
+    want evidence of how the board behaves when a feed goes dark, that will be a planned game day under its own name,
+    like <a href="/notes/postmortem-game-day-1/">game day 1</a>. It won't be an incident.
+  </p>
+
+  <h2>What this is not</h2>
+  <p>
+    It isn't a configuration database, and it isn't a claim about anyone else's estate. It's one owner-operated site on
+    a free tier, with six things that can expire, run in public.
+  </p>
+
+  <h2>The rule that came out of it</h2>
+  <p>If the site can't read an expiry or a quota, the page says so. Silence is a bug.</p>
+
+  <p class="more">
+    <a href="/reliability/#limits">What could stop this site</a> · <a href="/notes/postmortem-free-tier-writes/">Postmortem: the day's database writes</a> · <a href="/notes/postmortem-game-day-1/">Postmortem: game day 1</a> · <a href="/notes/how-this-site-is-run/">How this site is run</a>
+  </p>
+</Base>
+
+<style>
+  .kicker { color: var(--muted); font-size: 0.875rem; margin: 0 0 0.5rem; }
+  .deck { font-size: 1.0625rem; margin: 0 0 0.5rem; }
+  h2 { font-size: 1.125rem; margin: 2.25rem 0 0.5rem; }
+  .small { font-size: 0.875rem; }
+  .updates { padding-left: 1.2rem; margin: 0; font-size: 0.9375rem; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.9375rem; }
+  th, td { text-align: left; vertical-align: top; padding: 0.4rem 0.5rem; border-bottom: 1px solid var(--line); }
+  .findings thead th { color: var(--muted); font-weight: 500; }
+  .findings { min-width: 34rem; }
+  .scroll { overflow-x: auto; }
+  .more { margin-top: 2rem; font-size: 0.9375rem; }
+</style>

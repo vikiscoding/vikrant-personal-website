@@ -195,7 +195,11 @@ export async function refreshLimits(env: Env): Promise<void> {
   try {
     const now = Date.now();
     const rec = (await env.PULSE.get<Record_>(KEY, "json")) ?? { expiries: [], expiriesAt: null, usage: null, usageAt: null };
-    const expiriesDue = !rec.expiriesAt || now - Date.parse(rec.expiriesAt) >= EXPIRY_EVERY_MS;
+    // A check that failed (a token not set yet, an issuer that didn't answer) is retried every 30 minutes, so a fix
+    // shows within half an hour instead of up to a day later.
+    const expiryAge = rec.expiriesAt ? now - Date.parse(rec.expiriesAt) : Infinity;
+    const failed = rec.expiries.some((c) => c.error);
+    const expiriesDue = expiryAge >= EXPIRY_EVERY_MS || (failed && expiryAge >= USAGE_EVERY_MS);
     // The day's figures restart at 00:00 UTC: refresh then too, so the card never shows yesterday's total as today's.
     const newDay = rec.usageAt !== null && rec.usageAt.slice(0, 10) !== new Date(now).toISOString().slice(0, 10);
     const usageDue = !rec.usageAt || now - Date.parse(rec.usageAt) >= USAGE_EVERY_MS || newDay;
