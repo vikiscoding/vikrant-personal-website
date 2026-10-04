@@ -37,6 +37,12 @@ export interface SiteNote {
 
 export const siteNotes: SiteNote[] = [
   {
+    title: "The failure list that lost its history",
+    date: "2026-10-04",
+    claim: "Nothing was lost. One cap was shared, and the wrong records filled it.",
+    href: "/notes/failure-list-lost-history/",
+  },
+  {
     title: "When a load test used up the day's database writes",
     date: "2026-10-02",
     claim: "The failure looked like a choice. The logs said otherwise.",

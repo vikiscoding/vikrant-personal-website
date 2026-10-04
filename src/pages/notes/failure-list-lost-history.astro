@@ -1,0 +1,117 @@
+---
+// Site note: the reliability page's failure list lost game day 1 and the 2 Oct outage from view (4 Oct 2026).
+// Facts trace to the commit that fixed it (per-source cap, /reliability/failures/) and to /api/slo before and after.
+// Screenshots: 3 Oct capture (then), live capture 4 Oct 22:06 UTC (before), production after the deploy (after).
+import Base from "../../layouts/Base.astro";
+---
+
+<Base
+  title="The failure list that lost its history · vikrantsingh.fyi"
+  description="The reliability page stopped showing two game days and an outage. Nothing was lost; a shared cap on one read hid them. What I saw, the cause, and the fix."
+>
+  <p class="kicker"><time datetime="2026-10-04">4 October 2026</time> · Display bug, no data lost</p>
+  <h1>The failure list that lost its history</h1>
+  <p class="deck">The reliability page stopped showing two game days and an outage. Nothing was lost. One read had a cap, and the wrong records filled it.</p>
+
+  <h2>Summary</h2>
+  <p>
+    On 4 October I noticed the Failures list on <a href="/reliability/">Live reliability</a> showed two entries, both
+    from 3 October. The game days of 1 and 2 October, which used to be there, were gone. The 30-day strip right above
+    it still showed those days in red and amber, so the page disagreed with itself.
+  </p>
+  <p>
+    No record was lost. The site keeps every detailed record for 400 days. The page asked for the newest 1,000 of
+    them across every source at once, and the multiplayer game had produced most of the recent ones: 590 slow-turn
+    records and 382 round-trip timings. Everything older than midday on 2 October fell outside the 1,000, including
+    every game-day failure. The fix caps each source on its own, and a new page lists the full history.
+  </p>
+
+  <dl class="facts">
+    <div><dt>Found</dt><dd>By eye: the list and the strip above it disagreed</dd></div>
+    <div><dt>Cause</dt><dd>One cap of 1,000 records shared by every source, filled by the game's records</dd></div>
+    <div><dt>Data lost</dt><dd>None. Daily totals and every detailed record were intact</dd></div>
+    <div><dt>User impact</dt><dd>The failure history was hidden from the page; the objectives and budgets were right throughout</dd></div>
+    <div><dt>Error budget used</dt><dd>None. Nothing failed; a list was incomplete</dd></div>
+    <div><dt>Fixed</dt><dd>4 October, 6:15 p.m. Toronto time: all 12 failures of the window back on the page</dd></div>
+  </dl>
+
+  <h2>What it looked like</h2>
+  <figure>
+    <img src="/notes/failure-list-cap/then-3-oct.jpg" width="690" height="403" loading="lazy" decoding="async"
+      alt="The Failures list on 3 October, showing ten entries from 1 and 2 October: probe checks and scheduled jobs that failed, most tagged game day." />
+    <figcaption class="small muted">3 October: the list as it was, with both game days tagged.</figcaption>
+  </figure>
+  <figure>
+    <img src="/notes/failure-list-cap/before-4-oct.jpg" width="680" height="337" loading="lazy" decoding="async"
+      alt="The 30-day strip on 4 October showing red and amber days, outlined, above a Failures list, outlined, that shows only two entries from 3 October." />
+    <figcaption class="small muted">4 October, before the fix: the strip shows failures on three days; the list below shows two entries.</figcaption>
+  </figure>
+  <figure>
+    <img src="/notes/failure-list-cap/after-4-oct.jpg" width="680" height="426" loading="lazy" decoding="async"
+      alt="The same strip after the fix, above a Failures list showing the latest five failures, game days tagged, and the line: Showing the latest 5 of 12 in the last 30 days. Full failure history." />
+    <figcaption class="small muted">After: the latest five, a count of the rest, and a link to all of them.</figcaption>
+  </figure>
+
+  <h2>Why it happened</h2>
+  <p>
+    The page read its records with one rule: newest first, at most 1,000. That made sense when the site's own checks
+    were the only thing writing detailed records. Then the multiplayer game started keeping records too, and a day of
+    play produces hundreds. The cap didn't belong to any one kind of record, so the busiest one used all of
+    it. The list had no way to know it was incomplete, so it didn't say so.
+  </p>
+
+  <h2>The fix</h2>
+  <ul>
+    <li>Each source gets its own cap of 200, so one busy source can never crowd out another. The read costs the same: it already scanned the whole window to sort it.</li>
+    <li>The dashboard shows the latest five failures and says how many there are, with a link to the rest.</li>
+    <li>A new <a href="/reliability/failures/">failure history</a> page lists every failure the site's checks have recorded, by day, with game days marked.</li>
+  </ul>
+  <figure class="tall">
+    <img src="/notes/failure-list-cap/history-page.jpg" width="680" height="1008" loading="lazy" decoding="async"
+      alt="The new Failure history page: 12 failures on 3 days since 1 October 2026, grouped under 3, 2 and 1 October, with game-day failures tagged." />
+    <figcaption class="small muted">The full history, grouped by day.</figcaption>
+  </figure>
+
+  <h2>Findings and actions</h2>
+  <div class="scroll"><table class="findings">
+    <thead><tr><th scope="col">#</th><th scope="col">Finding</th><th scope="col">Action</th><th scope="col">Status</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>One cap was shared by every source, so the busiest took it all</td><td>A cap per source</td><td>Fixed</td></tr>
+      <tr><td>2</td><td>A shortened list didn't say it was shortened</td><td>The list says "latest 5 of 12" and links to the rest</td><td>Fixed</td></tr>
+      <tr><td>3</td><td>There was no way to see older failures on the site</td><td>The failure history page</td><td>Fixed</td></tr>
+      <tr><td>4</td><td>The page's own checks test how records are drawn, not how they are read from storage</td><td>A check that runs the storage read itself</td><td>Open</td></tr>
+    </tbody>
+  </table></div>
+
+  <h2>What this is not</h2>
+  <p>It wasn't an outage or an incident. Pages served, the objectives and budgets were right, and nothing paged. It was a page that quietly showed less than it had.</p>
+
+  <h2>The rule that came out of it</h2>
+  <p>A list that is cut short says so, and says where the rest is.</p>
+
+  <p class="more">
+    <a href="/reliability/failures/">Failure history</a> · <a href="/reliability/">Live reliability</a> · <a href="/notes/postmortem-game-day-1/">Postmortem: game day 1</a> · <a href="/notes/postmortem-free-tier-writes/">Postmortem: the day's database writes</a>
+  </p>
+</Base>
+
+<style>
+  .kicker { color: var(--muted); font-size: 0.875rem; margin: 0 0 0.5rem; }
+  .deck { font-size: 1.0625rem; margin: 0 0 0.5rem; }
+  h2 { font-size: 1.125rem; margin: 2.25rem 0 0.5rem; }
+  .small { font-size: 0.875rem; }
+  .facts { display: grid; gap: 0.35rem 1.5rem; grid-template-columns: max-content 1fr; margin: 1.25rem 0 0; font-size: 0.9375rem; }
+  .facts div { display: contents; }
+  .facts dt { color: var(--muted); }
+  .facts dd { margin: 0; }
+  @media (max-width: 480px) { .facts { grid-template-columns: 1fr; } .facts dd { margin-bottom: 0.4rem; } }
+  figure { margin: 1rem 0 0; }
+  figure img { display: block; width: 100%; max-width: 34rem; height: auto; border: 1px solid var(--line); border-radius: 10px; }
+  figure.tall img { max-width: 24rem; }
+  figcaption { margin-top: 0.4rem; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.9375rem; }
+  th, td { text-align: left; vertical-align: top; padding: 0.4rem 0.5rem; border-bottom: 1px solid var(--line); }
+  .findings thead th { color: var(--muted); font-weight: 500; }
+  .findings { min-width: 34rem; }
+  .scroll { overflow-x: auto; }
+  .more { margin-top: 2rem; font-size: 0.9375rem; }
+</style>
