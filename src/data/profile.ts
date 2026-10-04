@@ -37,6 +37,12 @@ export interface SiteNote {
 
 export const siteNotes: SiteNote[] = [
   {
+    title: "Dependencies we couldn't see, and the one inside the checker",
+    date: "2026-10-04",
+    claim: "If we can't read an expiry, we don't call it fine. That includes the checker's own.",
+    href: "/notes/dependency-expiry-gaps/",
+  },
+  {
     title: "The failure list that lost its history",
     date: "2026-10-04",
     claim: "Nothing was lost. One cap was shared, and the wrong records filled it.",

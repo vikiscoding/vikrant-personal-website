@@ -1,0 +1,138 @@
+---
+// Site note: the dependency board's gaps, found and closed on 4 Oct 2026 (ADR-030). Times are Toronto time and trace
+// to the deploys, the limits workflow runs and GET /api/limits that day. Screenshots: live captures at 6:06 p.m.
+// (before), 7:11 p.m. (during) and 7:44 p.m. (after). Later changes go under a dated "Update"; never rewrite the day.
+import Base from "../../layouts/Base.astro";
+---
+
+<Base
+  title="Dependencies we couldn't see, and the one inside the checker · vikrantsingh.fyi"
+  description="This site lists everything that can expire and take it down. Two entries couldn't be read, so the page said so. Closing them found a third: the checker's own dependency."
+>
+  <p class="kicker"><time datetime="2026-10-04">4 October 2026</time> · Open risks, closed the same evening. Not an incident</p>
+  <h1>Dependencies we couldn't see, and the one inside the checker</h1>
+  <p class="deck">
+    This site lists everything that can expire and take it down. Two entries couldn't be read, so the page said so
+    instead of showing them as fine. Closing them turned up a third, inside the checker itself.
+  </p>
+
+  <h2>Summary</h2>
+  <p>
+    The <a href="/reliability/#limits">dependency board</a> on the reliability page lists every credential and
+    registration the site depends on, what breaks if each one lapses, and when it expires, read every day from the
+    service that issued it. On the evening it went live, four entries were green. Two were not: the usage feed's token
+    wasn't set, and the deploy token's expiry had never been reported. The page showed both as risks.
+  </p>
+  <p>
+    Both were closed within the hour. The fix for the second turned up a third gap: the check for the domain's own
+    expiry depended on a lookup service that refused the site's requests, and my first retry made that worse. By 7:44
+    p.m. all six entries were green, read from their sources, and the reminders the board had opened had closed
+    themselves.
+  </p>
+
+  <dl class="facts">
+    <div><dt>Found</dt><dd>By the board itself: "Unchecked" and "Not recorded", in amber</dd></div>
+    <div><dt>User impact</dt><dd>None. Once read, every entry had at least 329 days left; the risk was not knowing</dd></div>
+    <div><dt>Severity</dt><dd>P3 each: a reminder to the owner, never a page or an incident</dd></div>
+    <div><dt>Closed</dt><dd>7:43 p.m., 4 October: all six read from their sources, both reminders closed</dd></div>
+  </dl>
+
+  <h2>Why this sits on the reliability page</h2>
+  <p>
+    Objectives answer one question: is the site meeting its targets? They can't answer another: what will stop it
+    while the outside probe is still green? On 2 October the site <a href="/notes/postmortem-free-tier-writes/">ran
+    out of its daily database writes</a>. The limit was real and published, but nothing on the page showed it coming.
+    The board is the answer: list what can lapse, read its date, and say plainly when a date can't be read.
+  </p>
+
+  <h2>Before</h2>
+  <figure>
+    <img src="/notes/dependency-expiry-gaps/before-gaps.jpg" width="680" height="865" loading="lazy" decoding="async"
+      alt="The dependency board at 6:06 p.m. Four entries are green. Outlined: the usage feed token, Unchecked, not set; the Cloudflare deploy token, Not recorded, not reported yet; and today's free allowance, Not connected." />
+    <figcaption class="small muted">6:06 p.m.: two gaps, shown as risks. 1: the usage feed token isn't set, so today's allowance can't be shown either. 2: the deploy token's expiry hasn't been reported.</figcaption>
+  </figure>
+
+  <h2>Blast radius</h2>
+  <p>
+    <strong>Usage feed missing.</strong> Visitors are served and the probe stays green, but I can't see how much of the
+    day's free allowance is used. That's the same class of failure as the write-budget outage: a limit I can't see
+    until it stops something.
+  </p>
+  <p>
+    <strong>Deploy token not reported.</strong> A deploy could fail, without warning, on the day the token expires. The
+    live site keeps running either way.
+  </p>
+
+  <h2>Closing them, and what that found</h2>
+  <div class="scroll"><table>
+    <tbody>
+      <tr><th scope="row">6:20 p.m.</th><td>The domain check gets "429: too many requests" from the lookup service</td></tr>
+      <tr><th scope="row">6:28 p.m.</th><td>First run of the daily reminder job: the deploy token reads 31 March 2028. Gap 2 closed. It opens P3 reminders for the usage feed and the domain</td></tr>
+      <tr><th scope="row">6:36 p.m.</th><td>Fix: a retry re-asks only what failed, and a busy service can't erase a good date. My retry had been re-asking every service every 30 minutes, which made the 429 worse</td></tr>
+      <tr><th scope="row">7:00 p.m.</th><td>The usage feed token is set and read: 30 November 2027. Today's allowance appears. Gap 1 closed</td></tr>
+      <tr><th scope="row">7:06 p.m.</th><td>Fix: ask the .fyi registry directly instead of a shared redirect service</td></tr>
+      <tr><th scope="row">7:40 p.m.</th><td>Still 429. Both services limit Cloudflare's shared network addresses, which the site's requests come from</td></tr>
+      <tr><th scope="row">7:42 p.m.</th><td>Fix: the daily job, which runs on GitHub's machines, reads the domain's expiry and reports it with the deploy token's</td></tr>
+      <tr><th scope="row">7:43 p.m.</th><td>All six green. Both reminders closed themselves</td></tr>
+    </tbody>
+  </table></div>
+  <figure>
+    <img src="/notes/dependency-expiry-gaps/during-domain.jpg" width="680" height="840" loading="lazy" decoding="async"
+      alt="The board at 7:11 p.m. Five entries are green and today's allowance is shown. Outlined: the domain, Unchecked, Couldn't check: registry http 429." />
+    <figcaption class="small muted">7:11 p.m.: both gaps closed, and a third showing. 3: the domain's own check is refused.</figcaption>
+  </figure>
+
+  <h2>After</h2>
+  <figure>
+    <img src="/notes/dependency-expiry-gaps/after-all-green.jpg" width="680" height="800" loading="lazy" decoding="async"
+      alt="The board at 7:44 p.m. All six entries green: the domain, read from the registry by the deploy pipeline, 29 September 2027; GitHub token, 30 August 2027; incident desk token, 30 September 2027; log backfill token, 31 October 2027; usage feed token, 30 November 2027; Cloudflare deploy token, 31 March 2028. Today's free allowance shown below." />
+    <figcaption class="small muted">7:44 p.m.: all six read from their sources, and today's allowance in view.</figcaption>
+  </figure>
+
+  <h2>Findings and actions</h2>
+  <div class="scroll"><table class="findings">
+    <thead><tr><th scope="col">#</th><th scope="col">Finding</th><th scope="col">Action</th><th scope="col">Status</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>The usage feed token wasn't set</td><td>A read-only analytics token; today's allowance on the page</td><td>Done</td></tr>
+      <tr><td>2</td><td>The deploy token's expiry wasn't reported</td><td>The daily job reads it and reports it</td><td>Done</td></tr>
+      <tr><td>3</td><td>The checker depended on a lookup service that refuses the site's network</td><td>Read from GitHub's machines by the daily job; the site's own lookup still tried first</td><td>Done</td></tr>
+      <tr><td>4</td><td>My retry asked every service again whenever one failed, and let a busy answer erase a good date</td><td>Retry only what failed; keep the last good date through a busy answer</td><td>Done</td></tr>
+    </tbody>
+  </table></div>
+
+  <h2>What this is not</h2>
+  <p>
+    It isn't a configuration database, and it isn't a claim about anyone else's estate. It's one owner-operated site on
+    a free tier, with six things that can expire, run in public.
+  </p>
+
+  <h2>The rules that came out of it</h2>
+  <p>If the site can't read an expiry or a quota, the page says so. Silence is a bug.</p>
+  <p>A monitor's own dependencies are dependencies too.</p>
+
+  <p class="more">
+    <a href="/reliability/#limits">What could stop this site</a> · <a href="/notes/failure-list-lost-history/">The failure list that lost its history</a> · <a href="/notes/postmortem-free-tier-writes/">Postmortem: the day's database writes</a> · <a href="/notes/how-this-site-is-run/">How this site is run</a>
+  </p>
+</Base>
+
+<style>
+  .kicker { color: var(--muted); font-size: 0.875rem; margin: 0 0 0.5rem; }
+  .deck { font-size: 1.0625rem; margin: 0 0 0.5rem; }
+  h2 { font-size: 1.125rem; margin: 2.25rem 0 0.5rem; }
+  .small { font-size: 0.875rem; }
+  .facts { display: grid; gap: 0.35rem 1.5rem; grid-template-columns: max-content 1fr; margin: 1.25rem 0 0; font-size: 0.9375rem; }
+  .facts div { display: contents; }
+  .facts dt { color: var(--muted); }
+  .facts dd { margin: 0; }
+  @media (max-width: 480px) { .facts { grid-template-columns: 1fr; } .facts dd { margin-bottom: 0.4rem; } }
+  figure { margin: 1rem 0 0; }
+  figure img { display: block; width: 100%; max-width: 30rem; height: auto; border: 1px solid var(--line); border-radius: 10px; }
+  figcaption { margin-top: 0.4rem; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.9375rem; }
+  th, td { text-align: left; vertical-align: top; padding: 0.4rem 0.5rem; border-bottom: 1px solid var(--line); }
+  tbody th { color: var(--muted); font-weight: 500; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .findings thead th { color: var(--muted); font-weight: 500; }
+  .findings { min-width: 34rem; }
+  .scroll { overflow-x: auto; }
+  .more { margin-top: 2rem; font-size: 0.9375rem; }
+</style>
