@@ -101,9 +101,19 @@ export function parseGithubExpiry(h: string | null): string | null {
   return isoOrNull(s);
 }
 
+/**
+ * The .fyi registry's own RDAP service (IANA's bootstrap list, data.iana.org/rdap/dns.json), with rdap.org as the
+ * fallback. rdap.org is a shared redirector that rate-limits Cloudflare's shared addresses (429, 4 Oct 2026).
+ */
+const RDAP = ["https://rdap.identitydigital.services/rdap/domain/vikrantsingh.fyi", "https://rdap.org/domain/vikrantsingh.fyi"];
+
 async function checkDomain(): Promise<Omit<Checked, "id" | "checkedAt">> {
-  const res = await timed("https://rdap.org/domain/vikrantsingh.fyi", { headers: { accept: "application/rdap+json", ...UA } });
-  if (!res.ok) return { expiresAt: null, error: `registry http ${res.status}` };
+  let res: Response | null = null;
+  for (const url of RDAP) {
+    res = await timed(url, { headers: { accept: "application/rdap+json", ...UA } }).catch(() => null);
+    if (res?.ok) break;
+  }
+  if (!res?.ok) return { expiresAt: null, error: `registry http ${res?.status ?? "unreachable"}` };
   const body = (await res.json()) as { events?: { eventAction?: string; eventDate?: string }[] };
   const exp = isoOrNull(body.events?.find((e) => e.eventAction === "expiration")?.eventDate);
   return exp ? { expiresAt: exp } : { expiresAt: null, error: "registry gave no expiry" };
