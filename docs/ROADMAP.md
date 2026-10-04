@@ -27,6 +27,7 @@ Engineering roadmap for vikrantsingh.fyi. Decisions are in [`docs/adr/`](adr/REA
 ## Next
 
 - [ ] **Read the 2 Oct backfill's restored count** from the `op = ledger_backfill` lines (before about 5 Oct, when the logs expire), and close finding 7.
+- [ ] **Rebuilt readings shown per day** (2 Oct incident, finding 9): store how many readings each day were rebuilt from logs, per source, and show it on `/reliability/` (for example "2 Oct: N readings rebuilt from logs"). A ledger schema change: try on the dev Worker first. Only future outages will show it; 2 Oct's tags are already folded into its totals.
 - [ ] **Isolate load testing from production capacity** (incident finding 2): a separate Cloudflare account for the dev Worker, or a paid plan, before any load test above ~40 rooms.
 - [ ] **First monthly reliability note, 30 Oct 2026.** A short public note per 30-day window: budget spent and why, what changed, what comes next. The decisions, not just the numbers. The first can record the burn-down chart as that window's change.
 - [ ] **Error budget burn-down goes live, 30 Oct 2026, on its own.** Built and merged early; `/reliability/` shows it only once the first full window is in (the same condition that retires the "Collecting data" banner). Check it on the day; nothing else on graphs until then.

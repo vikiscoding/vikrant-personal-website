@@ -73,7 +73,7 @@ import Base from "../../layouts/Base.astro";
   <figure class="wide">
     <img src="/notes/free-tier-writes/catching-up-reliability.jpg" width="720" height="880" loading="lazy" decoding="async"
       alt="The Live reliability page after the reset. A banner reads: Catching up on readings since 2026-10-02 13:36 EDT; the readings are being rebuilt from the site's logs, half an hour at a time. Below it, the status is Operating normally and both objectives are within budget." />
-    <figcaption class="small muted">8:30 p.m., after the reset: missed readings are being rebuilt from the logs while everything else reads normal (finding 7). Nobody touched anything between this and the pictures above. One line overstates: only failed or slow rebuilt readings keep the "backfilled" mark (finding 9 in the raw record, open).</figcaption>
+    <figcaption class="small muted">8:30 p.m., after the reset: missed readings are being rebuilt from the logs while everything else reads normal (finding 7). Nobody touched anything between this and the pictures above. One line overstated: only failed or slow rebuilt readings keep the "backfilled" mark (finding 9).</figcaption>
   </figure>
 
   <h2>What went well</h2>
@@ -117,8 +117,9 @@ import Base from "../../layouts/Base.astro";
       <tr><td>4</td><td>Detected by eye; nothing signalled the refused writes</td><td>The heartbeat notices refused writes and queues a rebuild (never a page)</td><td>Fixed; a quiet notice is open</td></tr>
       <tr><td>5</td><td>The empty page looked like a choice</td><td>Every affected place names the cause and the reset time</td><td>Fixed</td></tr>
       <tr><td>6</td><td>The game failed as a dead connection</td><td>A "Ludo is napping" screen with the reset in your own time</td><td>Fixed</td></tr>
-      <tr><td>7</td><td>Six and a half hours of readings missed</td><td>Rebuilt from logs after any outage, automatically, marked as backfilled</td><td>Fixed; the rebuild ran on 3 Oct</td></tr>
+      <tr><td>7</td><td>Six and a half hours of readings missed</td><td>Rebuilt from logs after any outage, automatically, back into each day's totals</td><td>Fixed; the rebuild ran on 3 Oct</td></tr>
       <tr><td>8</td><td>The page went dark although only writes were refused; it turned out reads are refused too</td><td>A read copy of the 30-day records, refreshed every 10 minutes, shown with "Recording paused since…" when the store can't be read</td><td>Fixed</td></tr>
+      <tr><td>9</td><td>The site said rebuilt readings were "marked as backfilled", but only failed or slow ones keep the mark: good ones go into the day's totals unmarked. For 2 Oct, two marked readings exist</td><td>Every page now says what really happens. A visible count of rebuilt readings per day comes with the next change to how records are stored</td><td>Wording fixed; count open</td></tr>
     </tbody>
   </table></div>
 
@@ -138,8 +139,8 @@ import Base from "../../layouts/Base.astro";
   <p>
     The fixes that matter most are the ones that change what happens next time. When this site's records can't be
     written, for any reason, each missed reading is logged in full. The heartbeat notices the refusal, and on the first
-    healthy run afterwards the missed readings are rebuilt from the logs, marked as backfilled so the record stays
-    honest. Running out of a budget is never treated as an incident, and never hidden either.
+    healthy run afterwards the missed readings are rebuilt from the logs, back into each day's totals; any that failed or
+    were slow are kept in full and marked as rebuilt, so the record stays honest about them. Running out of a budget is never treated as an incident, and never hidden either.
   </p>
 
   <p class="more">

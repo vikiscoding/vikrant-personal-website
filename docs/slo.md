@@ -91,7 +91,7 @@ Vendor retention is short (Workers Logs: a few days; UptimeRobot free: 30 days s
 - Built 30 Sep 2026: the dashboard at `/reliability/` (ADR-013).
 - Still to build: the daily Git export (reads `/api/slo` plus the UptimeRobot API for the black-box SLO-1). Needs only `UPTIMEROBOT_API_KEY` (read-only) as a GitHub secret; no Cloudflare analytics token.
 - Paging is **not** served from this history. Alerts stay live in UptimeRobot.
-- **Ledger outages are rebuilt, not lost (ADR-028).** Every SLI event is also written to Workers Logs. If the ledger refuses writes (2 Oct 2026: the free tier's 100,000 daily rows written were used up), the refused entries are logged in full and replayed into the ledger on the next healthy run, marked `backfilled`. Capacity refusals themselves are never counted. Workers Logs keep 3 days on the Free plan, which bounds how long an outage can wait.
+- **Ledger outages are rebuilt, not lost (ADR-028).** Every SLI event is also written to Workers Logs. If the ledger refuses writes (2 Oct 2026: the free tier's 100,000 daily rows written were used up), the refused entries are logged in full and replayed into the ledger on the next healthy run, into each day's totals; replayed entries that failed or were slow are kept in full, marked `backfilled` (good ones are counted only, like any good event: finding 9 of the 2 Oct incident). Capacity refusals themselves are never counted. Workers Logs keep 3 days on the Free plan, which bounds how long an outage can wait.
 
 ## Why this is not theatre
 

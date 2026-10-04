@@ -55,10 +55,10 @@ Time to detect: minutes, by a person, not by a signal (finding 4). Time to mitig
 | 6 | Ludo failed as a dead connection | "Ludo is napping" screen with the reset in the player's time; no retries until then | Fixed (`5a2d6ce`) |
 | 7 | The ledger missed 6 h 24 min of records | Backfill from Workers Logs as a standing rule (ADR-028); today's gap seeded | Fixed; replay ran and the gap closed by 05:17 UTC on 3 Oct. Exact restored count still to read from `op = ledger_backfill` lines |
 | 8 | The dashboard went dark although only writes were refused; testing showed Cloudflare refuses reads too once the write allowance is used up | Read copy of the window in KV, shown labelled when the ledger cannot be read (ADR-029) | Fixed |
-| 9 | Rebuilt readings are said to be "marked as backfilled", but the ledger keeps full records only for failed or slow events, so good rebuilt readings lose the mark (two marked entries for 2 Oct) | Store rebuilt counts per day and source, and show them on `/reliability/` | Open |
+| 9 | Rebuilt readings are said to be "marked as backfilled", but the ledger keeps full records only for failed or slow events, so good rebuilt readings lose the mark (two marked entries for 2 Oct) | Every page now says what happens (rebuilt into each day's totals; failed or slow ones kept in full, marked); the postmortem lists it publicly. Next: store a rebuilt count per day and source and show it on `/reliability/` | Wording fixed (4 Oct 2026); count open |
 
 ## Open
 
 - Read the restored counts from the `op = ledger_backfill` lines (Cloudflare dashboard; logs keep 3 days, so before about 5 Oct) and compare them with the dry run (17 probe hits, 7 heartbeat runs, 29 page requests by 18:55). `ledger:gap` is already gone.
-- Finding 9.
+- Finding 9: the per-day rebuilt count (roadmap).
 - Findings 2 and 4 (non-paging notice).

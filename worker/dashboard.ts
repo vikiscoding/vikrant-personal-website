@@ -433,7 +433,7 @@ function recordingBanner(gap: Gap | null, now: number, copy: { asOf: string; cap
   const cause = copy && !copy.capacity ? "The record store can't be read right now, so" : "Today's free allowance of database writes is used up, so";
   const body = paused
     ? `${cause} the figures below stop there.${shown} Nothing is lost: readings since then are kept in the site's logs and are rebuilt automatically once writes resume${resumeAt ? ` at <strong>${esc(localStamp(new Date(resumeAt).toISOString()))}</strong>` : ""}.`
-    : `Recording was interrupted, and the readings since then are being rebuilt from the site's logs, half an hour at a time. The figures below fill in as that finishes; rebuilt readings are marked as backfilled.`;
+    : `Recording was interrupted, and the readings since then are being rebuilt from the site's logs, half an hour at a time. The figures below fill in as that finishes; rebuilt readings go back into each day's totals, and any that failed or were slow are kept in full, marked as backfilled.`;
   return `<section class="dash-card" data-state="warn" aria-label="Recording status">
     <h2>${head}</h2>
     <p class="dash-small">${body} The site and its outside monitor are unaffected, and this never raises an incident.</p>

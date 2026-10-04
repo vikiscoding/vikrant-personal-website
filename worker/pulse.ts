@@ -131,7 +131,7 @@ function capacityCard(): string {
   return `<div class="dash"><section class="dash-card" data-state="warn">
     <h2>Live numbers are paused until the daily allowance resets</h2>
     <p>Nothing is broken. This dashboard reads from storage on Cloudflare's free tier, and today's free allowance of database writes is used up. It resets at <strong>00:00 UTC (${localStamp(new Date(at).toISOString()).slice(11)})</strong>, in about ${untilText(at)}, and the numbers come back on their own.</p>
-    <p class="dash-small dash-muted">The site and the outside monitor that checks it every 5 minutes are unaffected, and running out of allowance never raises an incident. Nothing is lost: every reading is also written to the site's logs, and once the allowance resets the missed readings are rebuilt from them automatically, marked as backfilled. The live heartbeat is still here: <a href="/api/pulse">/api/pulse</a>.</p>
+    <p class="dash-small dash-muted">The site and the outside monitor that checks it every 5 minutes are unaffected, and running out of allowance never raises an incident. Nothing is lost: every reading is also written to the site's logs, and once the allowance resets the missed readings are rebuilt from them automatically, back into each day's totals. The live heartbeat is still here: <a href="/api/pulse">/api/pulse</a>.</p>
   </section></div>`;
 }
 
@@ -140,7 +140,7 @@ function unavailable(): string {
   return `<div class="dash"><section class="dash-card" data-state="warn">
     <h2>Live numbers are temporarily unavailable</h2>
     <p>The store that holds this site's reliability records can't be read right now, so the dashboard can't be drawn. The site itself is up, and the outside monitor that checks it every 5 minutes is unaffected.</p>
-    <p class="dash-small dash-muted">Readings taken while the store is unavailable are still written to the site's logs, and are rebuilt from them automatically once it is back, marked as backfilled. The live heartbeat is still here: <a href="/api/pulse">/api/pulse</a>.</p>
+    <p class="dash-small dash-muted">Readings taken while the store is unavailable are still written to the site's logs, and are rebuilt from them automatically once it is back, into each day's totals. The live heartbeat is still here: <a href="/api/pulse">/api/pulse</a>.</p>
   </section></div>`;
 }
 
