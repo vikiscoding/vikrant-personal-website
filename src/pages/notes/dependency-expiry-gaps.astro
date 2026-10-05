@@ -67,13 +67,13 @@ import Base from "../../layouts/Base.astro";
   <div class="scroll"><table>
     <tbody>
       <tr><th scope="row">6:20 p.m.</th><td>The domain check gets "429: too many requests" from the lookup service</td></tr>
-      <tr><th scope="row">6:28 p.m.</th><td>First run of the daily reminder job: the deploy token reads 31 March 2028. Gap 2 closed. It opens P3 reminders for the usage feed and the domain</td></tr>
+      <tr><th scope="row">6:28 p.m.</th><td>First run of the daily reminder job: the deploy token reads 31 March 2028. Gap 2 closed. It opens P3 reminders for the usage feed and the domain, and both arrive in my inbox</td></tr>
       <tr><th scope="row">6:36 p.m.</th><td>Fix: a retry re-asks only what failed, and a busy service can't erase a good date. My retry had been re-asking every service every 30 minutes, which made the 429 worse</td></tr>
       <tr><th scope="row">7:00 p.m.</th><td>The usage feed token is set and read: 30 November 2027. Today's allowance appears. Gap 1 closed</td></tr>
       <tr><th scope="row">7:06 p.m.</th><td>Fix: ask the .fyi registry directly instead of a shared redirect service</td></tr>
       <tr><th scope="row">7:40 p.m.</th><td>Still 429. Both services limit Cloudflare's shared network addresses, which the site's requests come from</td></tr>
       <tr><th scope="row">7:42 p.m.</th><td>Fix: the daily job, which runs on GitHub's machines, reads the domain's expiry and reports it with the deploy token's</td></tr>
-      <tr><th scope="row">7:43 p.m.</th><td>All six green. Both reminders closed themselves</td></tr>
+      <tr><th scope="row">7:43 p.m.</th><td>All six green. Both reminders closed themselves, and the inbox says so</td></tr>
     </tbody>
   </table></div>
   <figure>
@@ -88,6 +88,22 @@ import Base from "../../layouts/Base.astro";
       alt="The board at 7:44 p.m. All six entries green: the domain, read from the registry by the deploy pipeline, 29 September 2027; GitHub token, 30 August 2027; incident desk token, 30 September 2027; log backfill token, 31 October 2027; usage feed token, 30 November 2027; Cloudflare deploy token, 31 March 2028. Today's free allowance shown below." />
     <figcaption class="small muted">7:44 p.m.: all six read from their sources, and today's allowance in view.</figcaption>
   </figure>
+
+  <h2>The reminders reached a person</h2>
+  <p>
+    A check is only as good as the moment someone reads it, so this is the part I wanted to see. Each reminder is a
+    GitHub issue assigned to me, and GitHub emails it. Both arrived at 6:28 p.m., and the same inbox showed them
+    closing themselves at 7:43 p.m., once the fixes worked. Nobody had to remember to close anything.
+  </p>
+  <figure class="wide">
+    <img src="/notes/dependency-expiry-gaps/reminder-emails.png" width="961" height="296" loading="lazy" decoding="async"
+      alt="Eight emails from github-actions bot: at 6:28 p.m., issues 2 and 3, Limits: Domain vikrantsingh.fyi and Limits: Usage feed token, opened and assigned; at 7:43 p.m., the same two issues closed." />
+    <figcaption class="small muted">My inbox, cropped to the reminders: opened and assigned at 6:28 p.m., closed at 7:43 p.m.</figcaption>
+  </figure>
+  <p>
+    It is noisy: four emails per reminder (opened, assigned, a comment, closed). For a reminder that comes rarely and
+    escalates only as a date nears, that's acceptable. A check that kept reopening would not be.
+  </p>
 
   <h2>Findings and actions</h2>
   <div class="scroll"><table class="findings">
@@ -128,6 +144,7 @@ import Base from "../../layouts/Base.astro";
   figure { margin: 1rem 0 0; }
   figure img { display: block; width: 100%; max-width: 30rem; height: auto; border: 1px solid var(--line); border-radius: 10px; }
   figcaption { margin-top: 0.4rem; }
+  figure.wide img { max-width: 100%; }
   table { width: 100%; border-collapse: collapse; font-size: 0.9375rem; }
   th, td { text-align: left; vertical-align: top; padding: 0.4rem 0.5rem; border-bottom: 1px solid var(--line); }
   tbody th { color: var(--muted); font-weight: 500; white-space: nowrap; font-variant-numeric: tabular-nums; }

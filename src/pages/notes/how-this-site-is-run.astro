@@ -19,6 +19,7 @@ import Base from "../../layouts/Base.astro";
       <a href="/ludo/">Ludo</a> times every roll and move on the server, with its own objectives on the dashboard.</li>
     <li>I break it on purpose, restore it, and write down what I learned. <a href="/notes/postmortem-game-day-1/">Postmortem: game day 1</a> (1 October 2026).</li>
     <li>When something breaks that I didn't plan, it gets the same treatment. <a href="/notes/postmortem-free-tier-writes/">Postmortem: a load test used up the day's database writes</a> (2 October 2026).</li>
+    <li>Everything that can expire and take the site down is listed on the dashboard, with its date read every day from the service that issued it. Reminders reach me by email at 90, 60 and 30 days, and close themselves once fixed. <a href="/notes/dependency-expiry-gaps/">Dependencies we couldn't see</a> (4 October 2026).</li>
     <li>If the site's own records can't be written, nothing pages anyone and nothing is lost: every reading is also logged, and missed readings are rebuilt from the logs on the next healthy run.</li>
   </ul>
   <p>Status: the heartbeat and the external probe have been running since 30 September 2026. The first 30-day SLO numbers come after that window closes.</p>
