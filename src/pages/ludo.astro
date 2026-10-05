@@ -410,6 +410,8 @@ import Base from "../layouts/Base.astro";
     moves: number;
     mode: "solo" | "code";
     turnEndsAt: number | null;
+    /** Seats whose player has left; a bot is playing for them until they're back (or 2 minutes pass). */
+    away?: number[];
   };
 
   const $ = <T extends Element>(s: string) => document.querySelector<T>(s)!;
@@ -524,7 +526,10 @@ import Base from "../layouts/Base.astro";
   /** The player finished and chose to keep watching: hide the banner until the game ends or a new one starts. */
   let watching = false;
   const nameOf = (s: number) => view?.names?.[s] || NAMES[s]!;
-  const whoLabel = (s: number) => (s === you ? "You" : `${nameOf(s)}${view?.seats[s] === "bot" ? " (bot)" : ""}`);
+  const isAwaySeat = (s: number) => !!view?.away?.includes(s);
+  /** " (bot)", " (away)" or nothing: who is really making this seat's moves. */
+  const tag = (s: number, long = false) => (view?.seats[s] === "bot" ? " (bot)" : isAwaySeat(s) ? (long ? " (away, bot playing)" : " (away)") : "");
+  const whoLabel = (s: number) => (s === you ? "You" : `${nameOf(s)}${tag(s)}`);
 
   // ── Drawing ──────────────────────────────────────────────────────────────────────
   function fitCanvas(): void {
@@ -602,7 +607,7 @@ import Base from "../layouts/Base.astro";
       const mid = (ax + bx) / 2;
       const top = Math.min(ay, by);
       const bottom = Math.max(ay, by);
-      const label = s === you ? `YOU · ${nameOf(s)}` : `${nameOf(s)}${kind === "bot" ? " (bot)" : ""}`;
+      const label = s === you ? `YOU · ${nameOf(s)}` : `${nameOf(s)}${tag(s)}`;
       text(label, [mid, top + 0.5], s === you ? "bold 15px system-ui" : "600 13px system-ui", "#fff");
       if (s === you) {
         fillCells(x + 0.12, y + 0.12, 5.76, 5.76, "rgba(0,0,0,0)", "#1b1b1a", 5);
@@ -875,7 +880,7 @@ import Base from "../layouts/Base.astro";
       .map((kind, s) => {
         if (s === you || kind === "empty") return "";
         const last = (v.rolls[s] ?? []).slice(-5);
-        return `<div class="ticker"><span class="who">${esc(nameOf(s))}${kind === "bot" ? " (bot)" : ""}, last 5</span>${
+        return `<div class="ticker"><span class="who">${esc(nameOf(s))}${tag(s, true)}, last 5</span>${
           last.length ? chips(last, s) : '<span class="who">none yet</span>'
         }</div>`;
       })

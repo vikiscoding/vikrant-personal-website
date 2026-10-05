@@ -23,6 +23,9 @@ export const LOBBY_GOOD_MS = 120_000;
 /** Everyone disconnected mid-game without pressing Leave (tabs closed, phones asleep): this long to come back, then
  *  the game ends as if they had left (owner's call, 4 Oct 2026). Pressing Leave ends it at once. */
 export const EMPTY_GRACE_MS = 60_000;
+/** A player away from a friends' game this long gives their seat back to the bot for good: name cleared, seat free
+ *  for the next late joiner (owner, 5 Oct 2026). Back sooner, from the same tab, and the seat is still theirs. */
+export const AWAY_RELEASE_MS = 120_000;
 
 /** Room chat can carry 200 characters in any script; joined emoji and combining marks make that up to ~4 KB of JSON. */
 const MAX_MSG_BYTES = 4096;
@@ -66,8 +69,8 @@ interface Meta {
   botRun?: { steps: number; worst: number; late: number };
   /** Seats just taken over from a bot, waiting for the newcomer's name before the room announces it. */
   takeover?: number[];
-  /** Human seats whose player has no open connection, as announced to the room: a bot plays them meanwhile. */
-  away?: number[];
+  /** Per seat: when its player was last seen leaving (no open connection), while a bot plays for them. */
+  awaySince?: (number | null)[];
   /** When the last person disconnected mid-game; cleared when someone comes back within EMPTY_GRACE_MS. */
   emptySince?: number;
   /** The game ended because everyone left: the room keeps only this, and the link says the game has ended. */
@@ -413,8 +416,8 @@ export class LudoRoom extends DurableObject<Env> {
       if (m.mode === "solo" || humans === SEATS) this.begin(now);
     } else if (!m.ended && g.phase !== "over") {
       m.promptAt = now; // a returning player gets a fresh clock
-      if (m.away?.includes(seat)) {
-        m.away = m.away.filter((s) => s !== seat);
+      if (m.awaySince?.[seat]) {
+        m.awaySince[seat] = null;
         this.say(`${this.seatName(seat)} is back`);
       }
     }
@@ -676,6 +679,7 @@ export class LudoRoom extends DurableObject<Env> {
     }
     if (!g || !m || g.phase === "lobby" || g.phase === "over") return;
     const lag = m.due === null ? 0 : Math.max(0, t0 - m.due);
+    this.releaseAwaySeats(t0);
     const isBot = g.seats[g.turn] === "bot";
     const away = !isBot && this.isAway(g.turn);
     const promptAt = m.promptAt ?? m.turnStartedAt;
@@ -774,6 +778,21 @@ export class LudoRoom extends DurableObject<Env> {
     for (const s of this.ctx.getWebSockets()) if (s !== leaving) this.send(s, { t: "chat", lines: [line] });
   }
 
+  /** Seats whose player has been away longer than AWAY_RELEASE_MS go back to the bot: name and seat key cleared. */
+  private releaseAwaySeats(now: number): void {
+    const g = this.game!;
+    const m = this.meta!;
+    m.awaySince?.forEach((since, seat) => {
+      if (!since || now - since < AWAY_RELEASE_MS || !this.isAway(seat)) return;
+      const who = this.seatName(seat);
+      m.awaySince![seat] = null;
+      g.seats[seat] = "bot";
+      m.keys[seat] = null;
+      if (m.names) m.names[seat] = null;
+      this.say(`${who} didn't come back; ${COLOUR[seat]} is a bot again`);
+    });
+  }
+
   private seatName(seat: number): string {
     return this.meta?.names?.[seat] || COLOUR[seat]!;
   }
@@ -820,9 +839,9 @@ export class LudoRoom extends DurableObject<Env> {
     if (this.ctx.getWebSockets().filter((s) => s !== ws).length > 0) {
       const { seat } = ws.deserializeAttachment() as Attachment;
       const playing = g.phase === "roll" || g.phase === "move";
-      if (playing && !(g.finished ?? []).includes(seat) && this.isAway(seat, ws) && !(m.away ?? []).includes(seat)) {
-        m.away = [...(m.away ?? []), seat];
-        this.say(`${this.seatName(seat)} left; a bot is playing for them until they're back`, ws);
+      if (playing && !(g.finished ?? []).includes(seat) && this.isAway(seat, ws) && !m.awaySince?.[seat]) {
+        (m.awaySince ??= [null, null, null, null])[seat] = Date.now();
+        this.say(`${this.seatName(seat)} left; a bot is playing for them. Back within 2 minutes and the seat is still theirs`, ws);
         await this.schedule(ws);
         await this.persistState();
         this.broadcast();
@@ -880,6 +899,7 @@ export class LudoRoom extends DurableObject<Env> {
       moves: g.log.length,
       mode: m.mode,
       turnEndsAt: g.seats[g.turn] === "human" && g.phase !== "over" && g.phase !== "lobby" ? (m.promptAt ?? m.turnStartedAt) + HUMAN_PROMPT_MS : null,
+      away: (m.awaySince ?? []).map((t, s) => (t ? s : -1)).filter((s) => s >= 0),
     };
     for (const ws of this.ctx.getWebSockets()) {
       const { seat } = ws.deserializeAttachment() as Attachment;
