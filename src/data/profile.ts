@@ -37,6 +37,12 @@ export interface SiteNote {
 
 export const siteNotes: SiteNote[] = [
   {
+    title: "This site as a product: what I built, what I didn't, and what's next",
+    date: "2026-10-05",
+    claim: "Deterministic by default, AI where it earns its place, and done building but not done running.",
+    href: "/notes/this-site-as-a-product/",
+  },
+  {
     title: "Dependencies we couldn't see, and the one inside the checker",
     date: "2026-10-04",
     claim: "If we can't read an expiry, we don't call it fine. That includes the checker's own.",

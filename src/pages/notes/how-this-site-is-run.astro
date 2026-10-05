@@ -15,7 +15,7 @@ import Base from "../../layouts/Base.astro";
     <li>A scheduled job checks this site's latest commit and build status every 10 minutes and stores a snapshot.</li>
     <li>Every page reads that snapshot into the footer. If the read fails, the page still serves without it.</li>
     <li>An external probe checks every 5 minutes that the snapshot is fresh. Two service level objectives sit on those results.</li>
-    <li>Two small games add real traffic: <a href="/play/">Pulse run</a> reports what the browser experiences, and
+    <li>Two small games add real traffic: <a href="/play/">Pulse run</a> reports what the browser experiences, and{" "}
       <a href="/ludo/">Ludo</a> times every roll and move on the server, with its own objectives on the dashboard.</li>
     <li>I break it on purpose, restore it, and write down what I learned. <a href="/notes/postmortem-game-day-1/">Postmortem: game day 1</a> (1 October 2026).</li>
     <li>When something breaks that I didn't plan, it gets the same treatment. <a href="/notes/postmortem-free-tier-writes/">Postmortem: a load test used up the day's database writes</a> (2 October 2026).</li>

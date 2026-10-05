@@ -1,0 +1,119 @@
+---
+// Site note: this site as a product, by its owner (5 Oct 2026). The owner's answers (why it exists, what he's proud
+// of, what he won't build, the hours, what done means) with the decisions from docs/adr/ (each with the option it
+// rejected). Plans are dated and stated as plans. About the site, never about a job search (AGENTS.md).
+import Base from "../../layouts/Base.astro";
+const ADR = "https://github.com/vikiscoding/vikrant-personal-website/blob/main/docs/adr/README.md";
+---
+
+<Base
+  title="This site as a product: what I built, what I didn't, and what's next · vikrantsingh.fyi"
+  description="A solo build, run like a product: who it's for, the constraints, the decisions and what each one ruled out, what I won't build, the one thing I'd undo, and why it's now done building but not done running."
+>
+  <p class="kicker"><time datetime="2026-10-05">5 October 2026</time> · How I run this site as a product</p>
+  <h1>This site as a product: what I built, what I didn't, and what's next</h1>
+  <p class="deck">
+    A CV says I can run operations and build things. This site is meant to show it, and to show the judgement behind
+    it: what to build, what to leave out, and when to stop.
+  </p>
+
+  <h2>The job it does</h2>
+  <p>
+    It has two readers. The first has thirty seconds and wants to know whether I'm worth a conversation. The second is
+    me, as its operator: it has to be cheap and quiet to run, and honest when something is wrong. Everything on it
+    answers to one of those two. If a feature helps neither, it doesn't ship.
+  </p>
+
+  <h2>The constraints</h2>
+  <ul>
+    <li><strong>One person.</strong> I design it, build it, run it and write it up.</li>
+    <li><strong>A free tier.</strong> The site runs on Cloudflare's free plan, and on 2 October I <a href="/notes/postmortem-free-tier-writes/">ran out of its daily database writes</a>. The budget is real, so the design has to respect it.</li>
+    <li><strong>An hour or two a week</strong> from here on. That decides what's worth keeping as much as what's worth building.</li>
+  </ul>
+
+  <h2>Deterministic by default</h2>
+  <p>
+    I use AI to build software, and I'd rather it helped me build something solid than performed on the page. So the
+    site itself is plain, deterministic code: a scheduled job, a store of its own records, an outside monitor, and
+    pages that say exactly what those records show. The one place that uses live AI is the{" "}
+    <a href="/reliability/#incident-desk">incident desk</a>, where a model proposes a priority and drafts an update for
+    a real failure. It never decides. Every step after intake is a person's command, and since 1 October the model
+    can't even set the priority on its own. A multi-agent system would have been easy to build and impressive to
+    describe. It would also have defeated the point.
+  </p>
+
+  <h2>Decisions, and what each one ruled out</h2>
+  <p>Thirty decisions are recorded in the <a href={ADR}>decision log</a>, each with the option it rejected. These shaped the site most.</p>
+  <div class="scroll"><table class="findings">
+    <thead><tr><th scope="col">Chose</th><th scope="col">Instead of</th><th scope="col">Because</th></tr></thead>
+    <tbody>
+      <tr><td>Objectives only on a path I own: a heartbeat the site keeps itself</td><td>A status page of the hosting provider's uptime (the first version had one; I deleted it)</td><td>Measuring someone else's uptime is theatre</td></tr>
+      <tr><td>An incident desk that reports, with a human gate</td><td>Letting the model act, or letting visitors raise incidents</td><td>A confident wrong call is the failure that matters</td></tr>
+      <tr><td>Four proof items, no more</td><td>A full portfolio</td><td>A reader with thirty seconds needs a short list</td></tr>
+      <tr><td>A page-view count hidden until it means something</td><td>A public counter from day one</td><td>Small numbers read as "nobody looks"</td></tr>
+      <tr><td>No leaderboard on the game</td><td>Scores and accounts</td><td>A public score is spoofable, and it's a product I don't want to run</td></tr>
+      <tr><td>Running out of a free allowance is said plainly, never paged</td><td>Treating capacity as an incident</td><td>A budget isn't a fault, and false alarms teach people to ignore real ones</td></tr>
+      <tr><td>Scope on the homepage, outcome numbers on the CV</td><td>Percentages from past roles on the site</td><td>The site is the evidence; it shouldn't argue from memory</td></tr>
+    </tbody>
+  </table></div>
+
+  <h2>What I won't build</h2>
+  <ul>
+    <li><strong>AI theatre.</strong> No chat assistant and no agents talking to agents. The incident desk is the only live AI, and it only proposes. AI earns a place by doing a job, not by being there.</li>
+    <li><strong>More games.</strong> Two small ones exist because they measure something: what a browser experiences, and how long a move takes on the server. A third is ruled out.</li>
+    <li><strong>A know-it-all.</strong> No claims ahead of evidence, no "industry-leading", no figures nobody can check.</li>
+    <li><strong>A template for others.</strong> Readers would become users, with their own needs. The hours don't allow it.</li>
+  </ul>
+
+  <h2>The one thing I'd undo</h2>
+  <p>
+    I'd have frozen the multiplayer game at its job. It was built as a bounded test of server latency, after I'd
+    written a rule against a second game and then overruled it. Then it grew: chat in any language, names, rematches,
+    full screen, bots, late joiners, rooms that end when everyone leaves. Each step made sense on its own. Together
+    they made it the busiest part of the site. By late afternoon on 3 October it had written 12,091 of the 14,678
+    database rows the day had used so far, and its records crowded <a href="/notes/failure-list-lost-history/">the site's own failures out of view</a>. It still
+    earns its place as the server-side sensor. It just took more than its share, and I let it.
+  </p>
+
+  <h2>Done building, not done running</h2>
+  <p>
+    The site is feature-complete as of today. Three things are left: the first full 30-day window of its
+    objectives closes on 30 October, when the error budget chart appears on its own; the first monthly reliability
+    note follows it; and the write-up of the second game day. After that, changes come only from running it: an
+    incident, a game-day finding, a renewal the <a href="/reliability/#limits">dependency board</a> flags, or a change
+    to my CV.
+  </p>
+  <p>
+    What grows from here isn't features. It's the record. A year from now that's twelve monthly notes, a full year of
+    objectives, and every failure written up. One-off projects can't show that.
+  </p>
+
+  <h2>Publishing plan</h2>
+  <ul>
+    <li>A reliability note every month, from 30 October: budget spent and why, and what changed.</li>
+    <li>A write-up for every game day and every real incident, like the <a href="/notes/postmortem-game-day-1/">first game day</a>.</li>
+    <li>A note when the site finds something about itself, like the <a href="/notes/dependency-expiry-gaps/">dependency board's blind spot</a>.</li>
+  </ul>
+  <p>That's the whole plan. It's small enough to keep.</p>
+
+  <h2>What this is not</h2>
+  <p>It isn't a product with customers, and it isn't a claim about running anything at scale. It's one person's site, built and run the way I'd want a team to run a product.</p>
+
+  <p class="more">
+    <a href={ADR}>Decision log</a> · <a href="/reliability/">Live reliability</a> · <a href="/notes/how-this-site-is-run/">How this site is run</a> · <a href="/notes/">All notes</a>
+  </p>
+</Base>
+
+<style>
+  .kicker { color: var(--muted); font-size: 0.875rem; margin: 0 0 0.5rem; }
+  .deck { font-size: 1.0625rem; margin: 0 0 0.5rem; }
+  h2 { font-size: 1.125rem; margin: 2.25rem 0 0.5rem; }
+  ul { padding-left: 1.2rem; }
+  li { margin: 0.3rem 0; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.9375rem; }
+  th, td { text-align: left; vertical-align: top; padding: 0.4rem 0.5rem; border-bottom: 1px solid var(--line); }
+  .findings thead th { color: var(--muted); font-weight: 500; }
+  .findings { min-width: 36rem; }
+  .scroll { overflow-x: auto; }
+  .more { margin-top: 2rem; font-size: 0.9375rem; }
+</style>
