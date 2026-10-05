@@ -66,6 +66,8 @@ interface Meta {
   botRun?: { steps: number; worst: number; late: number };
   /** Seats just taken over from a bot, waiting for the newcomer's name before the room announces it. */
   takeover?: number[];
+  /** Human seats whose player has no open connection, as announced to the room: a bot plays them meanwhile. */
+  away?: number[];
   /** When the last person disconnected mid-game; cleared when someone comes back within EMPTY_GRACE_MS. */
   emptySince?: number;
   /** The game ended because everyone left: the room keeps only this, and the link says the game has ended. */
@@ -411,6 +413,10 @@ export class LudoRoom extends DurableObject<Env> {
       if (m.mode === "solo" || humans === SEATS) this.begin(now);
     } else if (!m.ended && g.phase !== "over") {
       m.promptAt = now; // a returning player gets a fresh clock
+      if (m.away?.includes(seat)) {
+        m.away = m.away.filter((s) => s !== seat);
+        this.say(`${this.seatName(seat)} is back`);
+      }
     }
     await this.schedule();
     await this.save();
@@ -622,16 +628,36 @@ export class LudoRoom extends DurableObject<Env> {
   }
 
   /** One alarm drives bots and turn timeouts. `due` is kept so alarm lateness is measured, not assumed. */
-  private async schedule(): Promise<void> {
+  /** Seats with an open connection right now (`leaving` is a socket being closed, not yet gone from the list). */
+  private connectedSeats(leaving?: WebSocket): Set<number> {
+    const out = new Set<number>();
+    for (const s of this.ctx.getWebSockets()) {
+      if (s === leaving) continue;
+      out.add((s.deserializeAttachment() as Attachment).seat);
+    }
+    return out;
+  }
+
+  /**
+   * A human seat with nobody connected to it. A late joiner who closed the tab, or a friend whose phone dropped,
+   * left every turn waiting out two 15-second prompts (owner's game, 5 Oct 2026). Now a bot plays that seat at bot
+   * pace, with the sensible move, until they come back; the seat stays theirs.
+   */
+  private isAway(seat: number, leaving?: WebSocket): boolean {
+    return this.game!.seats[seat] === "human" && !this.connectedSeats(leaving).has(seat);
+  }
+
+  private async schedule(leaving?: WebSocket): Promise<void> {
     const g = this.game!;
     const m = this.meta!;
-    const live = this.ctx.getWebSockets().length > 0;
+    const live = this.ctx.getWebSockets().filter((s) => s !== leaving).length > 0;
     if (!live || g.phase === "lobby" || g.phase === "over") {
       m.due = null;
       await this.ctx.storage.deleteAlarm();
       return;
     }
-    const due = g.seats[g.turn] === "bot" ? Date.now() + BOT_STEP_MS : (m.promptAt ?? m.turnStartedAt) + HUMAN_PROMPT_MS;
+    const botPace = g.seats[g.turn] === "bot" || this.isAway(g.turn, leaving);
+    const due = botPace ? Date.now() + BOT_STEP_MS : (m.promptAt ?? m.turnStartedAt) + HUMAN_PROMPT_MS;
     m.due = due;
     await this.ctx.storage.setAlarm(due);
   }
@@ -651,8 +677,9 @@ export class LudoRoom extends DurableObject<Env> {
     if (!g || !m || g.phase === "lobby" || g.phase === "over") return;
     const lag = m.due === null ? 0 : Math.max(0, t0 - m.due);
     const isBot = g.seats[g.turn] === "bot";
+    const away = !isBot && this.isAway(g.turn);
     const promptAt = m.promptAt ?? m.turnStartedAt;
-    if (!isBot && t0 < promptAt + HUMAN_PROMPT_MS) return this.schedule();
+    if (!isBot && !away && t0 < promptAt + HUMAN_PROMPT_MS) return this.schedule();
 
     // Bots play a seeded random legal move (the original spec). An idle human gets the best move instead:
     // the game keeps going for as long as their tab stays connected, and they would rather not be played badly.
@@ -676,7 +703,7 @@ export class LudoRoom extends DurableObject<Env> {
     await this.schedule();
     await this.save();
     this.broadcast();
-    if (!isBot) {
+    if (!isBot && !away) {
       // A human ran out of patience or left: an engagement signal, not a server fault.
       this.rec({ op: "ludo_turn", outcome: "degraded", status: 200, ms: t0 - promptAt, detail: detail({ mode: m.mode, result: "timeout", kind: action.kind }) });
     }
@@ -733,11 +760,22 @@ export class LudoRoom extends DurableObject<Env> {
     m.takeover = m.takeover.filter((s) => s !== seat);
     const colour = COLOUR[seat]!;
     const who = m.names?.[seat];
+    this.say(who ? `${who} joined and took over ${colour} from the bot` : `A new player joined and took over ${colour} from the bot`);
+  }
+
+  /** A line the room itself writes into the chat (friends' rooms only): kept in the room, never in telemetry. */
+  private say(text: string, leaving?: WebSocket): void {
+    const m = this.meta;
+    if (!m || m.mode !== "code") return;
     const seq = (m.chatSeq ?? 0) + 1;
-    const line: ChatLine = { id: seq, seat: -1, name: "", text: who ? `${who} joined and took over ${colour} from the bot` : `A new player joined and took over ${colour} from the bot`, at: Date.now(), system: true };
+    const line: ChatLine = { id: seq, seat: -1, name: "", text, at: Date.now(), system: true };
     m.chatSeq = seq;
     m.chat = [...(m.chat ?? []), line].slice(-CHAT_KEEP);
-    for (const s of this.ctx.getWebSockets()) this.send(s, { t: "chat", lines: [line] });
+    for (const s of this.ctx.getWebSockets()) if (s !== leaving) this.send(s, { t: "chat", lines: [line] });
+  }
+
+  private seatName(seat: number): string {
+    return this.meta?.names?.[seat] || COLOUR[seat]!;
   }
 
   /**
@@ -779,7 +817,18 @@ export class LudoRoom extends DurableObject<Env> {
     const g = this.game;
     const m = this.meta;
     if (!g || !m) return;
-    if (this.ctx.getWebSockets().filter((s) => s !== ws).length > 0) return;
+    if (this.ctx.getWebSockets().filter((s) => s !== ws).length > 0) {
+      const { seat } = ws.deserializeAttachment() as Attachment;
+      const playing = g.phase === "roll" || g.phase === "move";
+      if (playing && !(g.finished ?? []).includes(seat) && this.isAway(seat, ws) && !(m.away ?? []).includes(seat)) {
+        m.away = [...(m.away ?? []), seat];
+        this.say(`${this.seatName(seat)} left; a bot is playing for them until they're back`, ws);
+        await this.schedule(ws);
+        await this.persistState();
+        this.broadcast();
+      }
+      return;
+    }
     if (g.phase === "roll" || g.phase === "move") {
       // Mid-game and nobody left connected: hold the game for EMPTY_GRACE_MS, then end it (the alarm does).
       m.emptySince = Date.now();

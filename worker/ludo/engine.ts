@@ -172,10 +172,28 @@ export function endWithoutHumans(g: Game): Game {
 }
 
 /** The server's move for a bot or a timed-out human: a seeded random legal action. */
+/** Whether moving `token` with the current die would knock an opponent's token back to its yard. */
+export function captures(g: Game, token: number): boolean {
+  if (g.die === null) return false;
+  const seat = g.turn;
+  const from = g.tokens[seat]![token]!;
+  const to = from === -1 ? 0 : from + g.die;
+  if (to > 50) return false;
+  const sq = absolute(seat, to);
+  return !SAFE.has(sq) && g.tokens.some((list, s) => s !== seat && list.some((p) => p >= 0 && p <= 50 && absolute(s, p) === sq));
+}
+
+/**
+ * The server's move for a bot or a timed-out human: a seeded random legal action, capture first. A bot that walks
+ * past an open capture looks broken, not kind (owner, 5 Oct 2026), so when any legal move captures, the draw picks
+ * among those; otherwise among all. Still one RNG draw per move, so a game replays exactly from its log.
+ */
 export function autoAction(g: Game): [Action, Game] {
   if (g.phase === "roll") return [{ seat: g.turn, kind: "roll" }, g];
   const [r, rng] = next(g.rng);
-  const token = g.legal[Math.floor(r * g.legal.length)] ?? g.legal[0]!;
+  const capturing = g.legal.filter((t) => captures(g, t));
+  const pool = capturing.length ? capturing : g.legal;
+  const token = pool[Math.floor(r * pool.length)] ?? g.legal[0]!;
   return [{ seat: g.turn, kind: "move", token, auto: true }, { ...g, rng }];
 }
 
@@ -210,8 +228,7 @@ export function bestMove(g: Game): number {
     if (from === -1) score += 60;
     if (to <= 50) {
       const sq = absolute(seat, to);
-      const captures = !SAFE.has(sq) && g.tokens.some((list, s) => s !== seat && list.some((p) => p >= 0 && p <= 50 && absolute(s, p) === sq));
-      if (captures) score += 80;
+      if (captures(g, i)) score += 80;
       if (SAFE.has(sq)) score += 20;
       score -= 30 * threats(g, seat, sq);
     } else if (from <= 50) {
