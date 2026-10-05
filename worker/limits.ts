@@ -77,6 +77,8 @@ interface Record_ {
   usage: UsageRow[] | null;
   usageAt: string | null;
   usageError?: string;
+  /** The previous UTC day's complete totals, re-read after the reset (the last reading before it can be 30 min short). */
+  yesterday?: { day: string; usage: UsageRow[] };
 }
 /** What the deploy pipeline reports about its own token (POST /api/limits/ci). */
 interface CiReport {
@@ -191,11 +193,11 @@ export function mergeChecks(prev: Checked[], next: Checked[], now = Date.now()):
   return [...out.values()];
 }
 
-/** Today's (UTC) use of each daily allowance, for the whole account, from Cloudflare's analytics. */
-async function readUsage(env: Env): Promise<UsageRow[]> {
+/** One UTC day's use of each daily allowance (today by default), for the whole account, from Cloudflare's analytics. */
+async function readUsage(env: Env, day = new Date().toISOString().slice(0, 10)): Promise<UsageRow[]> {
   if (!env.CF_ANALYTICS_TOKEN || !env.CF_ACCOUNT_ID) throw new Error("not connected");
-  const now = new Date();
-  const day = now.toISOString().slice(0, 10);
+  const end = new Date(Date.parse(`${day}T00:00:00Z`) + 86_400_000);
+  const now = new Date(Math.min(Date.now(), end.getTime() - 1));
   const query = `query($a:String!,$d:Date!,$f:Time!,$t:Time!){viewer{accounts(filter:{accountTag:$a}){
     rows: durableObjectsPeriodicGroups(limit:1000, filter:{datetimeMinute_geq:$f, datetimeMinute_leq:$t}){ sum{ rowsWritten rowsRead } }
     doReq: durableObjectsInvocationsAdaptiveGroups(limit:1000, filter:{date:$d}){ sum{ requests } }
@@ -238,8 +240,12 @@ export async function refreshLimits(env: Env): Promise<void> {
     const retry = new Set(rec.expiries.filter((c) => c.error && now - Date.parse(c.checkedAt) >= USAGE_EVERY_MS - 60_000).map((c) => c.id));
     const expiriesDue = fullDue || retry.size > 0;
     // The day's figures restart at 00:00 UTC: refresh then too, so the card never shows yesterday's total as today's.
-    const newDay = rec.usageAt !== null && rec.usageAt.slice(0, 10) !== new Date(now).toISOString().slice(0, 10);
-    const usageDue = !rec.usageAt || now - Date.parse(rec.usageAt) >= USAGE_EVERY_MS - 60_000 || newDay;
+    const today = new Date(now).toISOString().slice(0, 10);
+    const newDay = rec.usageAt !== null && rec.usageAt.slice(0, 10) !== today;
+    // Just after the reset the day's figures are near zero and Cloudflare's analytics run minutes behind: read every
+    // tick for the first half hour, so the page fills in quickly instead of showing zeros until 00:30 UTC.
+    const earlyInDay = now - Date.parse(`${today}T00:00:00Z`) < USAGE_EVERY_MS;
+    const usageDue = !rec.usageAt || now - Date.parse(rec.usageAt) >= USAGE_EVERY_MS - 60_000 || newDay || earlyInDay;
     if (!expiriesDue && !usageDue) return;
     if (expiriesDue) {
       rec.expiries = mergeChecks(rec.expiries, await checkExpiries(env, fullDue ? undefined : retry), now);
@@ -247,6 +253,11 @@ export async function refreshLimits(env: Env): Promise<void> {
     }
     if (usageDue) {
       try {
+        if (newDay || earlyInDay) {
+          // Yesterday's complete totals, re-read while its last minutes settle into the analytics.
+          const y = new Date(Date.parse(`${today}T00:00:00Z`) - 86_400_000).toISOString().slice(0, 10);
+          rec.yesterday = { day: y, usage: await readUsage(env, y) };
+        }
         rec.usage = await readUsage(env);
         rec.usageError = undefined;
       } catch (e) {
@@ -284,7 +295,9 @@ export interface UsageView {
 export interface LimitsView {
   generated_at: string;
   expiries: ExpiryView[];
-  usage: { as_of: string; resets_at: string; items: UsageView[] } | null;
+  usage: { as_of: string; resets_at: string; items: UsageView[]; new_day: boolean } | null;
+  /** The previous UTC day's final totals, once re-read after the reset. */
+  yesterday: { day: string; items: UsageView[] } | null;
   usage_note: string | null;
 }
 
@@ -329,6 +342,7 @@ export async function readLimits(env: Env, now = Date.now()): Promise<LimitsView
       ? {
           as_of: rec.usageAt,
           resets_at: new Date(nextReset()).toISOString(),
+          new_day: Date.parse(rec.usageAt) - Date.parse(`${rec.usageAt.slice(0, 10)}T00:00:00Z`) < 15 * 60_000,
           items: ALLOWANCES.map((a) => {
             const used = rec!.usage!.find((u) => u.id === a.id)?.used ?? 0;
             return { id: a.id, label: a.label, used, limit: a.limit, share: used / a.limit };
@@ -342,7 +356,18 @@ export async function readLimits(env: Env, now = Date.now()): Promise<LimitsView
       : rec?.usageError
         ? `Couldn't read today's figures: ${rec.usageError}.`
         : "No reading yet today.";
-  return { generated_at: new Date(now).toISOString(), expiries, usage, usage_note };
+  const yDay = new Date(Date.parse(`${new Date(now).toISOString().slice(0, 10)}T00:00:00Z`) - 86_400_000).toISOString().slice(0, 10);
+  const yesterday =
+    rec?.yesterday && rec.yesterday.day === yDay
+      ? {
+          day: rec.yesterday.day,
+          items: ALLOWANCES.map((a) => {
+            const used = rec!.yesterday!.usage.find((u) => u.id === a.id)?.used ?? 0;
+            return { id: a.id, label: a.label, used, limit: a.limit, share: used / a.limit };
+          }),
+        }
+      : null;
+  return { generated_at: new Date(now).toISOString(), expiries, usage, usage_note, yesterday };
 }
 
 export async function limitsApi(request: Request, env: Env): Promise<Response> {

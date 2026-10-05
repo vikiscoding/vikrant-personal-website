@@ -184,6 +184,26 @@ const { readLimits } = await import("../worker/limits.ts");
   console.log("ok - domain: the site's own lookup wins; when it fails, the pipeline's reading stands in");
   passed++;
 }
+{
+  // Just after the 00:00 UTC reset: the page says why the figures are near zero, and shows yesterday's totals.
+  const now = Date.parse("2026-10-05T00:05:00Z");
+  const kv = { PULSE: { get: async (k) => (k === "limits" ? {
+    expiries: [], expiriesAt: "2026-10-04T23:40:00Z", usageAt: "2026-10-05T00:00:03Z",
+    usage: [{ id: "do_rows_written", used: 0 }],
+    yesterday: { day: "2026-10-04", usage: [{ id: "do_rows_written", used: 12_400 }, { id: "kv_writes", used: 310 }] },
+  } : null) }, CF_ANALYTICS_TOKEN: "x" };
+  const v = await readLimits(kv, now);
+  assert.equal(v.usage.new_day, true);
+  assert.equal(v.yesterday.day, "2026-10-04");
+  const html = render({ ...window(now, 30) }, now).replace(/x/, "x"); // dashboard without limits: unaffected
+  assert.doesNotMatch(html, /A new day began/);
+  const { renderDashboard: rd } = await import("../worker/dashboard.ts");
+  const withLimits = rd(window(now, 30), null, null, null, now, null, null, v);
+  assert.match(withLimits, /A new day began at 20:00/);
+  assert.match(withLimits, /Yesterday \(UTC day 2026-10-04\): database rows written 12,400 \(12%\)/);
+  console.log("ok - after the daily reset: the page explains the zeros and shows yesterday's totals");
+  passed++;
+}
 check("GitHub's token-expiry header is read in both of its formats", () => {
   assert.equal(parseGithubExpiry("2027-08-30 00:00:00 UTC"), "2027-08-30T00:00:00.000Z");
   assert.equal(parseGithubExpiry("2027-08-30 00:00:00 -0700"), "2027-08-30T07:00:00.000Z");

@@ -267,6 +267,8 @@ function limitsSection(v: LimitsView, now: number): string {
           <div class="dash-meter" role="img" aria-label="${esc(u.label)}: ${pctNum}% of today's allowance used"><span style="width:${pctNum}%"></span></div></li>`;
         })
         .join("")}</ul>
+      ${v.usage.new_day ? `<p class="dash-small">A new day began at ${esc(localStamp(new Date(Date.parse(v.usage.resets_at) - 86_400_000).toISOString()).slice(11))}, so these start near zero. Cloudflare's figures run a few minutes behind; they fill in over the next half hour.</p>` : ""}
+      ${v.yesterday ? `<p class="dash-small dash-muted">Yesterday (UTC day ${esc(v.yesterday.day)}): ${v.yesterday.items.map((u) => `${esc(u.label.toLowerCase())} ${n(u.used)} (${Math.round(u.share * 100)}%)`).join(" · ")}.</p>` : ""}
       <p class="dash-small dash-muted">As of ${esc(localStamp(v.usage.as_of).slice(11))}; resets at ${esc(localStamp(v.usage.resets_at).slice(11))} (00:00 UTC). Shared by every Worker on the account. Running out pauses the live numbers and Ludo until the reset, and says so; it is never an incident. Total storage isn't shown: Cloudflare's analytics give no storage figure for this account.</p>`
     : `<p class="dash-small" data-state="warn"><span class="dash-badge" data-state="warn">NOT CONNECTED</span>${esc(v.usage_note ?? "No reading yet today.")}</p>`;
   return `<section class="dash-section" id="limits">
