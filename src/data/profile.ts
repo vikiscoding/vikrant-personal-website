@@ -98,11 +98,13 @@ export function formatDate(iso: string): string {
 }
 
 // Homepage copy by the owner (1 Oct 2026, ADR-022), with factual corrections agreed in review:
-// "IT services" not "software" for fifteen years (2009–2017 was IT operations); the ~95% is the infrastructure
-// for the 22 programs (résumé); the CompuCom team supported the estate, the integration was an SME role (résumé);
+// "IT services" not "software" for fifteen years (2009–2017 was IT operations); the CompuCom team supported the estate, the integration was an SME role (résumé);
 // drafts are never sent by anyone.
 // 3 Oct 2026: the CompuCom 55% and 35% figures came off this page. They were the owner's, not on the résumé,
 // and the paragraph no longer states a magnitude for automation or restore time.
+// 4 Oct 2026 (owner's call): no outcome percentages on this site at all. Citi's 95% on time and 60% fewer repeat
+// incidents stay on the résumé, where they are expected and asked about. The page keeps scope (programs, team,
+// estate, hours), because the site itself is the evidence; unverifiable numbers from years ago sat badly beside it.
 export const profile = {
   name: "Vikrant Singh",
   // Must match the LinkedIn headline. Regenerate public/og.png when it changes (scripts/make-brand-assets.py).
@@ -113,7 +115,7 @@ export const profile = {
   intro: "I've led teams, and I build hands-on: useful systems for businesses, including my own.",
   story: [
     "For fifteen years I've been accountable for IT services reaching people and staying up.",
-    "At Citi, through Virtusa, I ran delivery across 22 Trade and Transaction Services programs in North America, from design to go-live; the infrastructure for all 22 landed about 95% on time. Root-cause work on two trade applications cut repeat incidents by 60%.",
+    "At Citi, through Virtusa, I ran delivery across 22 Trade and Transaction Services programs in North America, from design to go-live, including the infrastructure for all 22. Root-cause work on two trade applications brought repeat incidents down.",
     "For the Government of Ontario, through CompuCom (2018–2021), I led a 15-person team supporting a 24x7 estate of 3,000+ servers, and was the subject-matter expert on its ServiceNow–Remedy integration. I was the person the client called on Sev-1 and Sev-2, and I ran the response through restore. We moved a large share of that volume onto automated resolution and shortened restore time by tightening the integration path and the runbooks around it.",
   ],
   principles: {
@@ -213,5 +215,5 @@ export const profile = {
       links: [{ label: "Open the live site", href: "https://atlasflowgroup.com" }],
     },
   ] satisfies Proof[],
-  writingBlurb: "Short essays on putting AI into operations without losing track of who decides.",
+  writingBlurb: "Notes from running this site, and short essays on putting AI into operations without losing track of who decides.",
 } as const;
