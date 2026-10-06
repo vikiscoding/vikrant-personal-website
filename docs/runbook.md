@@ -12,7 +12,7 @@ One page. For 3 a.m. Read top to bottom.
 3. **Why is the ticker failing?** Workers Logs, filter `op = "ticker"` and `outcome = "error"`. Read `dep` and `detail`:
    | `detail` | Likely cause | Fix |
    | --- | --- | --- |
-   | `http 401` | Token expired or revoked | New fine-grained token, `npx wrangler secret put GITHUB_TOKEN` |
+   | `http 401` | Token expired or revoked | New fine-grained token; replace `GITHUB_TOKEN` in the Cloudflare dashboard (Workers & Pages → `vikrantsingh-fyi` → Settings → Variables and Secrets) |
    | `http 403` / `http 429` | Rate limit | Check that the token is set; unauthenticated calls share Cloudflare IPs |
    | `http 5xx`, `TimeoutError` | GitHub incident | Check githubstatus.com. Wait; the budget absorbs it |
    | `injected …` | A game-day fault is still deployed | `npx wrangler deploy --var FAULT:none` |
@@ -53,7 +53,7 @@ Everything that can lapse is on `/reliability/#limits` ("What could stop this si
 
 ## Scheduled incidents
 
-- **GitHub token expiry:** **Mon 30 Aug 2027** (fine-grained token `vikrant-personal-website-fgtoken`: this repo only; read Actions, Contents, Metadata). Renew by 23 Aug 2027: regenerate, then `npx wrangler secret put GITHUB_TOKEN`. If it lapses, every tick fails with `http 401` and `/api/pulse` goes stale 35 min later.
+- **GitHub token expiry:** **Mon 30 Aug 2027** (fine-grained token `vikrant-personal-website-fgtoken`: this repo only; read Actions, Contents, Metadata). Renew by 23 Aug 2027: regenerate, then replace `GITHUB_TOKEN` in the Cloudflare dashboard. If it lapses, every tick fails with `http 401` and `/api/pulse` goes stale 35 min later.
 - **Incident desk dispatch token expiry:** **Thu 30 Sep 2027** (Worker secret `INCIDENTS_DISPATCH_TOKEN`; fine-grained, engine repo only, Contents read and write). Renew by 23 Sep 2027 in the Cloudflare dashboard. If it lapses, alerts stay `pending` in KV `incident:state` and no incident opens (UptimeRobot still pages).
 - **Cloudflare API token expiry (CI/CD):** read and reported daily by the `limits` workflow (see Renewals and expiries); until its first run, unknown. When it expires, every deploy fails with an authentication error. Renew 7 days before: new token, same permissions, update the `CLOUDFLARE_API_TOKEN` repo secret, and re-run the last `ci-cd` workflow.
 

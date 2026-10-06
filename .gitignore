@@ -7,3 +7,6 @@ dist/
 # Original résumé copies with private contact details. Only public/resume.pdf (the web copy) is published.
 /resume.pdf
 /*_Resume_Site.pdf
+
+# Raw captures kept locally only (screenshots and API output taken during incidents)
+docs/incidents/*-record/

@@ -2,7 +2,7 @@
 
 A personal site, **operated in public**. A static page on a CDN almost never fails, so its uptime proves nothing. This site runs one small dynamic path on purpose, and treats it like production: service level objectives, an outside probe, an incident desk with a human gate, game days and postmortems.
 
-**Live:** [site](https://vikrantsingh.fyi) · [Live reliability](https://vikrantsingh.fyi/reliability/) · [postmortem: game day 1](https://vikrantsingh.fyi/notes/postmortem-game-day-1/) · [raw SLI data](https://vikrantsingh.fyi/api/slo?days=30)
+**Live:** [site](https://vikrantsingh.fyi) · [Live reliability](https://vikrantsingh.fyi/reliability/) · [failure history](https://vikrantsingh.fyi/reliability/failures/) · [notes and postmortems](https://vikrantsingh.fyi/notes/) · [raw SLI data](https://vikrantsingh.fyi/api/slo?days=30) · [dependencies](https://vikrantsingh.fyi/api/limits)
 
 ## How it works
 
@@ -21,6 +21,7 @@ A personal site, **operated in public**. A static page on a CDN almost never fai
 - **`/api/pulse`** returns 200 while the snapshot is under 35 minutes old. An outside probe checks it every 5 minutes; that is SLO-1.
 - **The SLI ledger** records every scheduled run, probe hit, page view and game event: failures in full, successes counted. The [dashboard](https://vikrantsingh.fyi/reliability/) and `/api/slo` read it. If it cannot be written (for example, the free tier's daily allowance runs out), every event is still in Workers Logs and the missed ones are rebuilt from there on the next healthy run.
 - **The incident desk:** after two failed runs, the Worker raises an incident in the [incident engine](https://github.com/vikiscoding/vikrant_perswebsite_incidents_aiengine). An AI proposes triage and drafts that are never sent; every later step is a human command on a GitHub Issue.
+- **What could stop this site:** every credential and renewal the site depends on, each expiry read from its issuer every day, and today's use of the free-tier allowances, on the dashboard and at `/api/limits`. A daily workflow turns them into reminder issues that escalate at 90, 60 and 30 days and close themselves (ADR-030).
 - **Pulse run** (`/play/`) is a 30-second browser game whose errors and frame times are the client-side signal.
 - **Ludo** (`/ludo/`) is a server-authoritative multiplayer game (bots, invite links, room chat) whose connects, moves and round trips are timed on the server: the server-path signal ([docs/ludo-telemetry.md](docs/ludo-telemetry.md)).
 
@@ -32,7 +33,7 @@ A personal site, **operated in public**. A static page on a CDN almost never fai
 | What is live, what is next | [`docs/STATUS.md`](docs/STATUS.md) · [`docs/ROADMAP.md`](docs/ROADMAP.md) |
 | SLOs and their error budgets | [`docs/slo.md`](docs/slo.md) |
 | Runbook, including game-day faults | [`docs/runbook.md`](docs/runbook.md) |
-| Game day 1: timeline and findings | [`docs/gamedays/`](docs/gamedays/) |
+| Game days: timeline and findings | [`docs/gamedays/`](docs/gamedays/) |
 | Real incidents: timeline and findings | [`docs/incidents/`](docs/incidents/) |
 | Log and SLI event schema | [`docs/log-schema.md`](docs/log-schema.md) |
 | Working rules and conventions for contributors and coding agents | [`AGENTS.md`](AGENTS.md) |
@@ -47,8 +48,9 @@ Push to `main` → GitHub Actions runs type checks, the build and a dry-run depl
 npm install
 cp .dev.vars.example .dev.vars        # optional: a read-only GitHub token for the ticker
 npm run preview                       # build + wrangler dev on http://localhost:8787
-npx wrangler dev --test-scheduled     # then: curl "http://localhost:8787/__scheduled" to run a tick
-npm run check                         # astro check + Worker typecheck
+npm run check                         # astro check + Worker typecheck + dashboard checks
+# Run the scheduled job once against a running dev server:
+curl -X POST "http://localhost:8787/cdn-cgi/local/explorer/api/local/scheduled?worker=vikrantsingh-fyi" \n  -H 'content-type: application/json' -d '{"cron":"*/10 * * * *"}'
 ```
 
 Game-day faults are deploy-time variables (`FAULT` in `wrangler.jsonc`); there is no request-time toggle.

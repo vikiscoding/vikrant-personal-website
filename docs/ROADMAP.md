@@ -23,22 +23,27 @@ Engineering roadmap for vikrantsingh.fyi. Decisions are in [`docs/adr/`](adr/REA
 | Ludo: server-path latency testbed with server-measured SLIs, bots, invite links, room chat in any language, full screen on phones (ADR-026) | 2 Oct 2026 |
 | Ludo scale: per-room telemetry batches, append-only moves, ~2 rows per move; play to last place; leave any time (ADR-027) | 2 Oct 2026 |
 | Free-tier incident: capacity-aware pages, collecting-data banner, public postmortem; ledger backfill from logs as a standing rule (ADR-028) | 2 Oct 2026 |
+| A read copy of the SLO window for when the ledger can't be read (ADR-029) | 2 Oct 2026 |
+| Ludo: late joiners take a bot's seat; games everyone has left end; telemetry v2 (human actions and bot runs measured apart) | 3–4 Oct 2026 |
+| What could stop this site: six renewals read from their issuers, today's free-tier use, escalating reminders (ADR-030); all six green | 4 Oct 2026 |
+| Error budget burn-down, built and hidden until the first full window; dashboard checks in CI | 4 Oct 2026 |
+| Reliability page redesigned answer-first; failure history page; the failure list's shared-cap bug fixed | 4 Oct 2026 |
+| Notes: the failure list, the dependency board, this site as a product | 4–5 Oct 2026 |
+| Homepage without outcome percentages; Ludo away seats at bot pace and capture-first bots | 5 Oct 2026 |
 
 ## Next
 
-- [ ] **Read the 2 Oct backfill's restored count** from the `op = ledger_backfill` lines (before about 5 Oct, when the logs expire), and close finding 7.
 - [ ] **Rebuilt readings shown per day** (2 Oct incident, finding 9): store how many readings each day were rebuilt from logs, per source, and show it on `/reliability/` (for example "2 Oct: N readings rebuilt from logs"). A ledger schema change: try on the dev Worker first. Only future outages will show it; 2 Oct's tags are already folded into its totals.
 - [ ] **Isolate load testing from production capacity** (incident finding 2): a separate Cloudflare account for the dev Worker, or a paid plan, before any load test above ~40 rooms.
-- [ ] **Close the dependency board's two gaps** (note: `/notes/dependency-expiry-gaps/`): add `CF_ANALYTICS_TOKEN` (finding 1) and `LIMITS_REPORT_TOKEN` plus one `limits` run (finding 2), then add a dated line under the note's "Updates" and mark the findings done. Never by hiding a row.
 - [ ] **First monthly reliability note, 30 Oct 2026.** A short public note per 30-day window: budget spent and why, what changed, what comes next. The decisions, not just the numbers. The first can record the burn-down chart as that window's change.
 - [ ] **Error budget burn-down goes live, 30 Oct 2026, on its own.** Built and merged early; `/reliability/` shows it only once the first full window is in (the same condition that retires the "Collecting data" banner). Check it on the day; nothing else on graphs until then.
 - [ ] **First 30-day SLO report, 30 Oct 2026.** Save the outside probe's 30-day uptime (SLO-1) and the ledger's scheduled-job success (SLO-2). Consider switching `DASHBOARD_MODE` to `auto`.
 - [ ] **Game day 2: fire the alert on purpose, recorded.** *Run 2 Oct 2026; record pending in `docs/gamedays/`.* Hold the fault until the outside monitor goes Down and alerts (about 40–45 min after the last good run), restore, then work the incident through the human gate. Proves the probe → alert → delivery path end to end (game day 1, finding 8). Prerequisite: the alert channel has space (finding 7).
 - [ ] **Pulse run break and restore.** After a few quiet days: deploy `FAULT=game_js_error`, watch the client-path block react, restore, and write it up.
-- [ ] **Repo-aware suggestions** in the incident engine: one demo repo, read-only. Each suggestion gives a likely cause, a candidate file, confidence, and "verify before prod", and is always labelled *proposed, not applied*.
 
 ## Later (ideas, not scheduled)
 
+- **Repo-aware suggestions** in the incident engine (moved from Next on 5 Oct 2026: a new feature, and the site is feature-complete): one demo repo, read-only. Each suggestion gives a likely cause, a candidate file, confidence, and "verify before prod", and is always labelled *proposed, not applied*.
 - **Ludo objectives held for a full window.** After 30 days of real play, decide whether `ludo_action` and `ludo_rtt` become SLOs with budgets, and whether a `FAULT=ludo_slow` game day earns a write-up.
 - **Pulse run server actions, for a user-journey SLO.** (Ludo now covers a server-measured journey; revisit whether this is still needed.) Today the game's telemetry is client-only and spoofable, so it can never be an SLO (ADR-015). Give the game a few small server calls during a session (for example a checkpoint at start, at each 30 s and at game over) and measure them **on the server**: success rate and latency per session. That makes a trustworthy journey-level SLI, a candidate third SLO ("a game session's server calls succeed and return within N ms"), and a way to stress-test the user-facing path deliberately (`FAULT` values such as `game_api_slow` / `game_api_5xx`).
   - Guardrails before building: an ADR; no shared state written by visitors (read-mostly or per-session only); validation and a per-session rate cap like `/api/rum`; recorded in the SLI ledger as its own source; `/privacy` updated first; never feeds paging until it has a full 30-day window.
