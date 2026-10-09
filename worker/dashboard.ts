@@ -8,7 +8,7 @@ import { addDays, localDay, localStamp } from "./time";
 import type { Feed, FeedIncident } from "./incidents";
 import type { Gap } from "./backfill";
 import { nextReset } from "./capacity";
-import type { ExpiryStatus, LimitsView } from "./limits";
+import type { ExpiryStatus, LimitsView, TicketView } from "./limits";
 
 export type DashboardMode = "off" | "auto" | "on";
 export const WINDOW_DAYS = 30;
@@ -20,33 +20,38 @@ export function dashboardMode(env: Env): DashboardMode {
 /** Expected events in a full 30-day window, from the schedules (probe every 5 min, ticker every 10 min). */
 const EXPECTED: Record<"pulse" | "ticker", number> = { pulse: 8_640, ticker: 4_320 };
 
+/*
+ * Names (panel, 9 Oct 2026: SRE, technical recruiter, front-end engineer, plain-language editor; ADR-031). Each
+ * signal is named "what is measured (where from)": the SRE term a reviewer would search for, then the mechanism in
+ * plain words. Client path and server path stay as section names: they say where the timer runs, which is the point
+ * of having both testbeds.
+ */
 const LUDO_EVENT_LABEL = {
-  ludo_action: "Ludo action",
-  ludo_bot: "Ludo bot pace",
-  ludo_rtt: "Ludo round trip",
-  ludo_connect: "Ludo connect",
-  ludo_lobby: "Ludo lobby",
-  ludo_game: "Ludo game",
+  ludo_action: "Ludo action latency",
+  ludo_bot: "Ludo bot turn lag",
+  ludo_rtt: "Ludo round-trip time",
+  ludo_connect: "Ludo connection",
+  ludo_lobby: "Ludo lobby wait",
+  ludo_game: "Ludo game completion",
   ludo_turn: "Ludo turn",
 } as const;
 const LABEL: Record<LedgerSource, string> = {
-  pulse: "Heartbeat freshness",
-  ticker: "Scheduled job success",
+  pulse: "Availability (outside probe)",
+  ticker: "Cron job success (GitHub sync)",
   page: "Page requests",
-  frame: "Pulse run frame time",
-  game: "Pulse run",
-  ludo_action: "Ludo action",
-  ludo_bot: "Ludo bot pace",
-  ludo_rtt: "Ludo round trip",
-  ludo_connect: "Ludo connect",
-  ludo_lobby: "Ludo lobby wait",
-  ludo_game: "Ludo game",
-  ludo_turn: "Ludo turn",
+  frame: "Frame time (Pulse run)",
+  game: "Pulse run sessions",
+  ...LUDO_EVENT_LABEL,
 };
-const EVENT_LABEL: Record<LedgerSource, string> = { pulse: "Probe check", ticker: "Scheduled job", page: "Page", frame: "Pulse run frame", game: "Pulse run (browser)", ...LUDO_EVENT_LABEL };
+const EVENT_LABEL: Record<LedgerSource, string> = { pulse: "Outside probe", ticker: "Cron job", page: "Page request", frame: "Pulse run frame", game: "Pulse run (browser)", ...LUDO_EVENT_LABEL };
+/** The SLI in one line: what one check is and when it counts as good (docs/slo.md). */
+const SLI: Record<"pulse" | "ticker", string> = {
+  pulse: "Black-box SLI · good = <code>GET /api/pulse</code> answers 200 within 2 s · every 5 min",
+  ticker: "White-box SLI · good = the scheduled run completes · every 10 min",
+};
 const EXPLAIN: Record<"pulse" | "ticker", string> = {
-  pulse: "Every 5 minutes an outside monitor asks whether this site's status snapshot is less than 35 minutes old.",
-  ticker: "Every 10 minutes a job fetches this site's latest commit and build status from GitHub and saves a snapshot.",
+  pulse: "An uptime monitor outside Cloudflare asks this site for its status snapshot. The site answers 200 only while the snapshot is under 35 minutes old, so one check covers both: the site is up, and its data is fresh.",
+  ticker: "A cron-triggered Worker reads this site's latest commit and CI result from the GitHub API and saves them as the status snapshot. This is the site's own record of the job the probe depends on: when it keeps failing, the probe's figure follows.",
 };
 
 const esc = (s: string) =>
@@ -118,6 +123,7 @@ function sloCard(win: SloWindow, source: "pulse" | "ticker"): string {
       : `<strong>Objective missed:</strong> ${n(used)} failures against ${n(allowed)} allowed`;
   return `<section class="dash-card" data-state="${state}">
     <h2>${LABEL[source]}</h2>
+    <p class="dash-small dash-muted">${SLI[source]}</p>
     <p class="dash-big">${big}</p>
     <p class="dash-small dash-muted">${n(sum?.good ?? 0)} of ${n(sum?.total ?? 0)} checks good</p>
     <p class="dash-small">Objective: <strong>${+(target * 100).toFixed(2)}%</strong> over 30 days</p>
@@ -147,7 +153,7 @@ function strip(days: DayRow[], now: number): string {
     return `<div class="dash-strip-row"><p class="dash-small">${LABEL[source]}</p><ol class="dash-strip">${cells}</ol></div>`;
   };
   return `<section class="dash-section">
-    <h2>Last 30 days</h2>
+    <h2>Daily record, last 30 days</h2>
     ${line("pulse")}${line("ticker")}
     <p class="dash-strip-axis dash-small dash-muted"><span>${keys[0]}</span><span>today</span></p>
     <p class="dash-legend dash-small dash-muted">
@@ -196,7 +202,7 @@ export function burnDown(days: DayRow[], now: number): string {
   const job = series("ticker");
   const words = (s: { allowed: number; left: number }) =>
     s.left >= 0 ? `${n(s.left)} of ${n(s.allowed)} failures left` : `overspent by ${n(-s.left)} of ${n(s.allowed)}`;
-  const desc = `Heartbeat freshness: ${words(hb)}. Scheduled job success: ${words(job)}.`;
+  const desc = `${LABEL.pulse}: ${words(hb)}. ${LABEL.ticker}: ${words(job)}.`;
   return `<section class="dash-section">
     <h2>Error budget over the window</h2>
     <figure class="dash-burn">
@@ -210,8 +216,8 @@ export function burnDown(days: DayRow[], now: number): string {
       </svg>
       <p class="dash-strip-axis dash-small dash-muted"><span>${keys[0]}</span><span>today</span></p>
       <figcaption class="dash-small">
-        <span class="burn-key burn-key-hb" aria-hidden="true"></span>Heartbeat freshness: ${words(hb)}
-        <span class="burn-key burn-key-job" aria-hidden="true"></span>Scheduled job success: ${words(job)}
+        <span class="burn-key burn-key-hb" aria-hidden="true"></span>${LABEL.pulse}: ${words(hb)}
+        <span class="burn-key burn-key-job" aria-hidden="true"></span>${LABEL.ticker}: ${words(job)}
       </figcaption>
       <p class="dash-small dash-muted">Top line: the full budget. Bottom line: all of it spent. A steep drop is a bad day; a gap is a day with no data.</p>
     </figure>
@@ -293,10 +299,10 @@ function speed(days: DayRow[], now: number): string {
     })
     .join("");
   return `<details class="dash-fold">
-    <summary>Speed by day <span class="dash-muted">· 95% of runs at least this fast</span></summary>
+    <summary>Latency by day (p95) <span class="dash-muted">· 95% of checks finished within this time</span></summary>
     <p class="dash-small dash-muted">Times are rounded up to the nearest band (50, 100, 200, 400, 800, 1,600, 3,200 ms).</p>
     <table class="dash-table">
-      <thead><tr><th scope="col">Day</th><th scope="col">Scheduled job <span class="dash-muted">(GitHub check)</span></th><th scope="col">Probe check <span class="dash-muted">(site's answer)</span></th></tr></thead>
+      <thead><tr><th scope="col">Day</th><th scope="col">Cron job <span class="dash-muted">(GitHub API read)</span></th><th scope="col">Outside probe <span class="dash-muted">(<code>/api/pulse</code> answer)</span></th></tr></thead>
       <tbody>${rows || `<tr><td colspan="3" class="dash-muted">No data yet.</td></tr>`}</tbody>
     </table>
   </details>`;
@@ -365,9 +371,9 @@ function clientPath(win: SloWindow): string {
   const tiles = g.sessions
     ? `<dl class="dash-facts dash-client">
         <div><dt>Sessions</dt><dd>${n(g.sessions)} <span class="dash-muted">(${n(g.started)} played)</span></dd></div>
-        <div><dt>Game error rate</dt><dd>${rate(g.errored)}</dd></div>
-        <div><dt>p95 frame time</dt><dd>${g.frame_p95_ms === null ? "—" : `≤ ${n(g.frame_p95_ms)} ms`}</dd></div>
-        <div><dt>Sessions with jank</dt><dd>${rate(g.janky)}</dd></div>
+        <div><dt>Session error rate</dt><dd>${rate(g.errored)}</dd><dd class="dash-small dash-muted">sessions with a JavaScript error</dd></div>
+        <div><dt>Frame time (p95)</dt><dd>${g.frame_p95_ms === null ? "—" : `≤ ${n(g.frame_p95_ms)} ms`}</dd><dd class="dash-small dash-muted">60 fps needs about 16 ms</dd></div>
+        <div><dt>Jank rate</dt><dd>${rate(g.janky)}</dd><dd class="dash-small dash-muted">sessions with a frame over 50 ms</dd></div>
       </dl>`
     : `<p>No plays recorded yet. <a href="/play/">Be the first →</a></p>`;
   const errs = errors.length
@@ -380,8 +386,8 @@ function clientPath(win: SloWindow): string {
         .join("")}</ol></details>`
     : "";
   return `<section class="dash-card" data-state="none" id="client-path">
-    <h2>Client path (<a href="/play/">Pulse run</a>)</h2>
-    <p class="dash-small dash-muted">A 30-second browser game on this site reports its own errors and frame times. Jank = a frame slower than 50 ms. 60 fps needs about 16 ms.</p>
+    <h2>Client path: browser telemetry (<a href="/play/">Pulse run</a>)</h2>
+    <p class="dash-small dash-muted">Real-user monitoring (RUM): a 30-second game times itself in the visitor's browser and sends its errors and frame times in one beacon. Reported by the browser, not measured by the server.</p>
     ${tiles}${errs}
     <p class="dash-small"><a href="/play/">Add a data point: play Pulse run for 30 seconds →</a></p>
     <p class="dash-small dash-muted">Client-only signal. Does not prove server capacity or ITSM readiness.</p>
@@ -400,7 +406,7 @@ function ludoSection(win: SloWindow): string {
   const played = (sum("ludo_game")?.total ?? 0) + (sum("ludo_connect")?.total ?? 0);
   if (!played) {
     return `<section class="dash-card" data-state="none" id="ludo">
-    <h2>Server path (<a href="/ludo/">Ludo</a>)</h2>
+    <h2>Server path: WebSocket game server (<a href="/ludo/">Ludo</a>)</h2>
     <p>No games recorded yet. <a href="/ludo/">Play a game →</a></p>
   </section>`;
   }
@@ -418,19 +424,19 @@ function ludoSection(win: SloWindow): string {
   const turns = sum("ludo_turn");
   const thinkToday = rows("ludo_turn").at(-1)?.p50_ms ?? null;
   return `<section class="dash-card" data-state="none" id="ludo">
-    <h2>Server path (<a href="/ludo/">Ludo</a>)</h2>
-    <p class="dash-small dash-muted">Every roll and move is decided and timed on the server, so these are measured, not reported by browsers. Objectives are proposed and not yet held for a full 30 days.</p>
+    <h2>Server path: WebSocket game server (<a href="/ludo/">Ludo</a>)</h2>
+    <p class="dash-small dash-muted">Every roll and move is decided and timed inside the game room on the server (a Durable Object), so these are measured, not reported by browsers. Objectives are proposed and not yet held for a full 30 days.</p>
     <dl class="dash-facts dash-client">
-      ${slo("ludo_connect", "Connects answered", "room answered")}
-      ${slo("ludo_action", "Player actions on time", "≤ 100 ms")}
-      ${slo("ludo_bot", "Bots on pace", "every step ≤ 250 ms late, per run of bot turns")}
-      ${slo("ludo_rtt", "Round trips fast", "≤ 300 ms")}
+      ${slo("ludo_connect", "Connection success", "WebSocket join answered: 101, or a correct refusal such as “full”")}
+      ${slo("ludo_action", "Action latency", "receive → save → broadcast ≤ 100 ms")}
+      ${slo("ludo_bot", "Bot turn lag", "each bot step ≤ 250 ms past its pace")}
+      ${slo("ludo_rtt", "Round-trip time", "server ping → page echo ≤ 300 ms")}
     </dl>
-    <details class="dash-fold"><summary>Engagement <span class="dash-muted">· games finished, lobbies, turn timeouts</span></summary>
+    <details class="dash-fold"><summary>Engagement <span class="dash-muted">· completion, lobby starts, turn timeouts</span></summary>
     <dl class="dash-facts dash-client">
-      <div><dt>Games finished</dt><dd>${share(games?.good ?? 0, games?.total ?? 0)}</dd><dd class="dash-small dash-muted">${n(games?.good ?? 0)} of ${n(games?.total ?? 0)} reached a winner</dd></div>
-      <div><dt>Lobbies started</dt><dd>${share(lobby?.good ?? 0, lobby?.total ?? 0)}</dd><dd class="dash-small dash-muted">within 2 minutes · ${n(lobby?.total ?? 0)} code rooms</dd></div>
-      <div><dt>Turns timed out</dt><dd>${share(turns?.bad ?? 0, turns?.total ?? 0)}</dd><dd class="dash-small dash-muted">30 s without a move${thinkToday === null ? "" : ` · median think ≤ ${n(thinkToday)} ms today`}</dd></div>
+      <div><dt>Game completion</dt><dd>${share(games?.good ?? 0, games?.total ?? 0)}</dd><dd class="dash-small dash-muted">${n(games?.good ?? 0)} of ${n(games?.total ?? 0)} reached a winner</dd></div>
+      <div><dt>Lobby start rate</dt><dd>${share(lobby?.good ?? 0, lobby?.total ?? 0)}</dd><dd class="dash-small dash-muted">within 2 minutes · ${n(lobby?.total ?? 0)} code rooms</dd></div>
+      <div><dt>Turn timeout rate</dt><dd>${share(turns?.bad ?? 0, turns?.total ?? 0)}</dd><dd class="dash-small dash-muted">30 s without a move${thinkToday === null ? "" : ` · median think ≤ ${n(thinkToday)} ms today`}</dd></div>
     </dl>
     </details>
     <p class="dash-small"><a href="/ludo/">Add a data point: play Ludo →</a> · <a href="/api/slo?days=30">raw data</a></p>
@@ -455,7 +461,33 @@ function trail(i: FeedIncident): string {
   return steps.join(" → ");
 }
 
-function incidentDesk(feed: Feed | null): string {
+/**
+ * Below incident level (ADR-031): the reminder issues the daily limits check keeps (ADR-030). Shown on the desk so a
+ * reader sees every ticket this site raised, not only the ones that reached the engine; still never an incident, never
+ * paged, never counted in "open incidents". Open ones first; closed ones folded.
+ */
+function ticketList(t: LimitsView["tickets"] | undefined, now: number): string {
+  const head = `<h3 class="dash-sub">Low-priority tickets</h3>
+    <p class="dash-small dash-muted">Raised by the daily dependency check, not by a failure: a renewal or expiry the owner needs to act on before anything breaks. They open at P3 (90 days out) and escalate to P2, P1 and P0 as the date nears; they never page anyone, and close themselves once fixed.</p>`;
+  if (!t) return `${head}<p class="dash-small">Not reported yet: the daily check sends its tickets after its next run.</p>`;
+  const one = (x: TicketView) => {
+    const level = x.level ? `<span class="dash-badge" data-state="${x.state === "closed" ? "none" : x.level === "P3" ? "warn" : "bad"}">${x.level}</span>` : "";
+    const span = x.closed_at ? ` · closed ${esc(localStamp(x.closed_at))}` : ` · open ${esc(ago(x.opened_at, now).replace(" ago", ""))}`;
+    return `<li>
+            <p class="dash-incident-head"><span class="dash-badge" data-state="${x.state === "open" ? "warn" : "good"}">${x.state.toUpperCase()}</span>${level}<a href="${esc(x.url)}">${esc(x.title.replace(/^Limits: /, ""))}</a> <span class="dash-muted">#${n(x.number)}</span></p>
+            <p class="dash-small dash-muted">Opened ${esc(localStamp(x.opened_at))}${span}</p>
+          </li>`;
+  };
+  const open = t.items.filter((x) => x.state === "open");
+  const closed = t.items.filter((x) => x.state === "closed");
+  const list = open.length ? `<ol class="dash-incidents">${open.map(one).join("")}</ol>` : `<p class="dash-small">No open tickets.</p>`;
+  const fold = closed.length
+    ? `<details class="dash-fold"><summary>${n(closed.length)} closed ticket${closed.length === 1 ? "" : "s"}</summary><ol class="dash-incidents">${closed.map(one).join("")}</ol></details>`
+    : "";
+  return `${head}${list}${fold}<p class="dash-small dash-muted">As of the daily check, ${esc(localStamp(t.as_of))} · <a href="#limits">the dependency board</a></p>`;
+}
+
+function incidentDesk(feed: Feed | null, tickets: LimitsView["tickets"] | undefined, now: number): string {
   const repo = feed?.repo ? `https://github.com/${esc(feed.repo)}` : null;
   const items = (feed?.incidents ?? []).slice(0, 5);
   const one = (i: FeedIncident) => {
@@ -464,8 +496,10 @@ function incidentDesk(feed: Feed | null): string {
           const proposal = i.triage
             ? `AI proposed <strong>${esc(i.triage.priority)}</strong> (confidence ${i.triage.confidence.toFixed(2)})`
             : "No AI proposal (model unavailable)";
+          // The priority in force, after the human gate; a test with none set shows no badge.
+          const priority = i.priority && i.priority !== "None" ? `<span class="dash-badge" data-state="none">${esc(i.priority.toUpperCase())}</span>` : "";
           return `<li>
-            <p class="dash-incident-head"><span class="dash-badge" data-state="${state}">${esc(i.state)}</span> ${title}</p>
+            <p class="dash-incident-head"><span class="dash-badge" data-state="${state}">${esc(i.state)}</span>${priority} ${title}</p>
             <p class="dash-small dash-muted">Opened ${esc(localStamp(i.created_at))} · ${proposal} · gate: ${esc(i.gate)}${
               i.drafts_unsent ? ` · ${n(i.drafts_unsent)} draft${i.drafts_unsent === 1 ? "" : "s"}, never sent` : ""
             }${i.recovered_at ? ` · site recovered ${esc(localStamp(i.recovered_at))}` : ""}</p>
@@ -485,7 +519,8 @@ function incidentDesk(feed: Feed | null): string {
     <h2>Incident desk</h2>
     <p class="dash-small dash-muted">Real failures of this site go to an incident triage agent. It proposes priority and drafts updates; a human runs every step after that, in public GitHub issues.</p>
     ${list}
-    <p class="dash-small dash-muted">Alerts from this site only; tests are titled as tests. AI drafts are never sent. Since 1 Oct 2026, every AI priority waits for a human approval; each entry's gate says which rule applied when it was triaged. AI priority never pages anyone: paging comes from the outside probe on this site's SLO. After intake, every state change is a human command.${
+    ${ticketList(tickets, now)}
+    <p class="dash-small dash-muted">Incidents are alerts from this site only; tests are titled as tests. AI drafts are never sent. Since 1 Oct 2026, every AI priority waits for a human approval; each entry's gate says which rule applied when it was triaged. AI priority never pages anyone: paging comes from the outside probe on this site's SLO. After intake, every state change is a human command.${
       repo ? ` <a href="${repo}">Engine repo →</a>` : ""
     }</p>
   </section>`;
@@ -559,7 +594,11 @@ export function renderDashboard(
   const status = !pulse ? "Status unavailable" : !fresh ? "Heartbeat late" : failing ? "Degraded" : "All checks normal";
   const summary = `<p class="dash-summary" data-state="${!fresh ? "bad" : failing ? "warn" : "good"}"><strong>${status}</strong> · ${
     openIncidents === 0 ? "no open incidents" : `${n(openIncidents)} open incident${openIncidents === 1 ? "" : "s"}`
-  }${
+  }${(() => {
+    // Tickets are counted apart from incidents (ADR-031), and only when there is one to see.
+    const t = limits?.tickets?.items.filter((x) => x.state === "open").length ?? 0;
+    return t ? ` · <a href="#incident-desk">${n(t)} open low-priority ticket${t === 1 ? "" : "s"}</a>` : "";
+  })()}${
     limits
       ? (() => {
           const risky = limits.expiries.filter((e) => e.status !== "ok" && e.status !== "none").length;
@@ -578,7 +617,7 @@ export function renderDashboard(
     ${speed(win.days, now)}
     ${failures(win.events)}
     ${limits ? limitsSection(limits, now) : ""}
-    ${incidentDesk(feed)}
+    ${incidentDesk(feed, limits?.tickets, now)}
     ${clientPath(win)}
     ${ludoSection(win)}
     <details class="dash-fold dash-howto">

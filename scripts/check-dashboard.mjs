@@ -78,9 +78,11 @@ check("a day without data does not delay the burn-down", () => {
 check("burn-down figures match the SLO cards", () => {
   const now = Date.parse("2026-11-10T16:00:00Z");
   const html = render(window(now, 30, (i, s) => (s === "pulse" ? (i % 5 === 0 ? 2 : 0) : i % 7 === 0 ? 1 : 0)), now);
-  const card = (label) => html.match(new RegExp(`${label}[\\s\\S]*?<strong>([\\d,]+) left</strong>`))[1];
-  assert.match(html, new RegExp(`Heartbeat freshness: ${card("Heartbeat freshness")} of 86 failures left`));
-  assert.match(html, new RegExp(`Scheduled job success: ${card("Scheduled job success")} of 86 failures left`));
+  const re = (s) => s.replace(/[()]/g, "\\$&");
+  const card = (label) => html.match(new RegExp(`${re(label)}[\\s\\S]*?<strong>([\\d,]+) left</strong>`))[1];
+  for (const label of ["Availability (outside probe)", "Cron job success (GitHub sync)"]) {
+    assert.match(html, new RegExp(`${re(label)}: ${card(label)} of 86 failures left`));
+  }
 });
 
 // A missing day breaks the line instead of joining across it.
@@ -97,7 +99,7 @@ check("an overspent budget is stated, not hidden", () => {
   const html = render(window(now, 30, (i, s) => (s === "ticker" && i === 3 ? 100 : 0)), now);
   assert.match(html, /Objective missed:/);
   assert.match(html, /aria-label="Error budget overspent"><span style="width:100%">/);
-  assert.match(html, /Scheduled job success: overspent by 14 of 86/);
+  assert.match(html, /Cron job success \(GitHub sync\): overspent by 14 of 86/);
 });
 
 // The budget bar shows what is left, the way its caption reads.
@@ -202,6 +204,40 @@ const { readLimits } = await import("../worker/limits.ts");
   assert.match(withLimits, /A new day began at 20:00/);
   assert.match(withLimits, /Yesterday \(UTC day 2026-10-04\): database rows written 12,400 \(12%\)/);
   console.log("ok - after the daily reset: the page explains the zeros and shows yesterday's totals");
+  passed++;
+}
+// Low-priority tickets on the incident desk (ADR-031): only the workflow's own issues are accepted, the link is built
+// by the site, and tickets are counted apart from incidents.
+const { parseTickets } = await import("../worker/limits.ts");
+const ticket = (o = {}) => ({ number: 4, title: "Limits: Domain vikrantsingh.fyi", level: "P3", state: "closed", opened_at: "2026-10-08T19:17:22Z", closed_at: "2026-10-09T18:49:45Z", ...o });
+check("tickets: the report is checked field by field", () => {
+  assert.equal(parseTickets([ticket()]).length, 1);
+  assert.equal(parseTickets([]).length, 0);
+  assert.equal(parseTickets([ticket({ title: "Anything else" })]), null);
+  assert.equal(parseTickets([ticket({ title: "Limits: <script>" })]), null);
+  assert.equal(parseTickets([ticket({ level: "P9" })]), null);
+  assert.equal(parseTickets([ticket({ state: "open" })]), null); // open with a closed date
+  assert.equal(parseTickets([ticket({ number: 1.5 })]), null);
+  assert.equal(parseTickets(Array.from({ length: 11 }, () => ticket())), null);
+  assert.equal(parseTickets("x"), null);
+});
+{
+  const now = Date.parse("2026-10-09T20:00:00Z");
+  const tix = { reportedAt: "2026-10-09T18:50:00Z", items: [ticket({ number: 5, title: "Limits: Usage feed token", state: "open", closed_at: null }), ticket()] };
+  const kv = { GITHUB_REPO: "o/r", PULSE: { get: async (k) => (k === "limits:tickets" ? tix : null) } };
+  const v = await readLimits(kv, now);
+  assert.equal(v.tickets.items[1].url, "https://github.com/o/r/issues/4");
+  const feed = { generated_at: "x", repo: "o/e", incidents: [{ id: "i", title: "t", state: "CLOSED", priority: "Low", created_at: "2026-10-01T00:00:00Z", updated_at: "", triage: null, gate: "g", drafts_unsent: 0, recovered_at: null, issue_url: null, timeline: [] }] };
+  const html = renderDashboard(window(now, 30), null, feed, null, now, null, null, v);
+  assert.match(html, /no open incidents · <a href="#incident-desk">1 open low-priority ticket<\/a>/);
+  assert.match(html, /Low-priority tickets/);
+  assert.match(html, /OPEN<\/span><span class="dash-badge" data-state="warn">P3<\/span><a href="https:\/\/github.com\/o\/r\/issues\/5">Usage feed token<\/a>/);
+  assert.match(html, /1 closed ticket</);
+  assert.match(html, /data-state="none">LOW<\/span>/);
+  const none = renderDashboard(window(now, 30), null, feed, null, now, null, null, { ...v, tickets: null });
+  assert.match(none, /Not reported yet: the daily check/);
+  assert.doesNotMatch(none, /low-priority ticket</);
+  console.log("ok - tickets: listed on the desk, open first, counted apart from incidents");
   passed++;
 }
 check("GitHub's token-expiry header is read in both of its formats", () => {

@@ -46,7 +46,7 @@ Every Ludo event is an ordinary SLI event (`docs/log-schema.md`): `v, ts, op, ou
 
 Logged only, not in the ledger: `ludo_invalid` (a rejected action: the player's mistake or a stale screen, never a server failure).
 
-**Where it shows:** `/reliability/#ludo` (Server path card: the four proposed objectives with worst-day p95, games finished, lobbies started, turns timed out and today's median think time) and `/api/slo?days=N` (`summary` and `days` rows for every `ludo_*` source). Ludo events are kept off the site's Failures list.
+**Where it shows:** `/reliability/#ludo` (Server path card: connection success, action latency, bot turn lag and round-trip time as proposed objectives with worst-day p95, games finished, lobbies started, turns timed out and today's median think time) and `/api/slo?days=N` (`summary` and `days` rows for every `ludo_*` source). Ludo events are kept off the site's Failures list.
 
 **Game day:** deploy `FAULT=ludo_slow` (adds 400 ms to every human action) and watch `ludo_action` burn its budget; restore with `FAULT=none`.
 

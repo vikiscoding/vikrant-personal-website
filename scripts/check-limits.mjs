@@ -2,6 +2,7 @@
 // (GET /api/limits, the same data /reliability/ shows) into one GitHub issue per item, escalating as a date nears:
 // 90 days P3, 60 days P2, 30 days P1, expired P0; "not recorded" or "couldn't check" P3. One issue per item, a new
 // comment only when it gets more urgent, closed by the check itself once fixed. Never an incident (ADR-016).
+// Then reports the latest of those issues to the site, which lists them on the incident desk (ADR-031).
 // Also checks the deploy pipeline's own Cloudflare token, which only CI holds, and reports its expiry to the site.
 // No packages: Node 24's fetch. `--dry-run` prints what it would do and changes nothing.
 const DRY = process.argv.includes("--dry-run");
@@ -126,6 +127,31 @@ async function main() {
       await gh("POST", `/issues/${issue.number}/comments`, { body: `Resolved: ${e.status_text}. Closing.` });
       await gh("PATCH", `/issues/${issue.number}`, { state: "closed" });
     }
+  }
+
+  // 4. The latest reminder issues, open and closed, for the incident desk (ADR-031). After step 3, so the site sees
+  // what this run just opened, escalated or closed.
+  const all = await gh("GET", "/issues?labels=limits&state=all&sort=created&direction=desc&per_page=20");
+  const tickets = (Array.isArray(all) ? all : [])
+    .filter((i) => !i.pull_request && /^Limits: /.test(i.title))
+    .slice(0, 10)
+    .map((i) => ({
+      number: i.number,
+      title: i.title,
+      level: i.labels?.map((l) => l.name).find((n) => LEVELS.includes(n)) ?? null,
+      state: i.state === "closed" ? "closed" : "open",
+      opened_at: i.created_at,
+      closed_at: i.state === "closed" ? i.closed_at : null,
+    }));
+  console.log(`Tickets: ${tickets.map((t) => `#${t.number} ${t.level ?? "-"} ${t.state}`).join(", ") || "none"}`);
+  if (process.env.LIMITS_REPORT_TOKEN && !DRY) {
+    const r = await fetch(`${SITE}/api/limits/ci`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${process.env.LIMITS_REPORT_TOKEN}`, "content-type": "application/json" },
+      body: JSON.stringify({ tickets }),
+    });
+    console.log(`Tickets reported to the site: ${r.status}`);
+    if (r.status !== 204) console.log(`  ${await r.text()}`);
   }
 }
 

@@ -4,7 +4,7 @@ Status: **draft targets**, measured since 30 Sep 2026. Revisit after the first 3
 
 Window: rolling 30 days. Sources: **black-box** (external probe) and **white-box** (the SLI ledger, a Durable Object written by `worker/log.ts`; Analytics Engine dataset `site_sli` as well once it is enabled).
 
-## SLO-1: Heartbeat freshness (black-box)
+## SLO-1: Availability, outside probe (black-box)
 
 | | |
 | --- | --- |
@@ -13,7 +13,7 @@ Window: rolling 30 days. Sources: **black-box** (external probe) and **white-box
 | Target | **99.0%**, so the error budget is about 86 bad checks ≈ **7 h 12 min** a month |
 | Why this number | The snapshot must be under 35 min old (30 until game day 1, ADR-017), so two missed ticks in a row are absorbed with one tick of margin. GitHub has real incidents. Start loose, then tighten from data. |
 
-## SLO-2: Ticker success (white-box)
+## SLO-2: Cron job success, GitHub sync (white-box)
 
 | | |
 | --- | --- |
@@ -28,8 +28,8 @@ Window: rolling 30 days. Sources: **black-box** (external probe) and **white-box
 | --- | --- |
 | Page degraded rate (`op=page`, `outcome=degraded` / all) | Volume depends on visitors and crawlers. Promote once it exceeds about 1,000 events a month. |
 | Page Worker time p95 (`op=page`, `double2`) | Same reason. Page speed stays a CI budget (L2). |
-| **Server path (Ludo, ADR-026):** connects answered (proposed 99.5%), actions on time (≤ 100 ms server time, human actions only; proposed 99%), bots on pace (one check per run of bot turns, every step ≤ 250 ms late; proposed 99%; split out in schema v2, 3 Oct 2026), round trips ≤ 300 ms (proposed 95%); lobby starts, turn timeouts and game completion tracked | Server-measured, so trustworthy, but volume depends on people playing. Promote to SLOs with budgets after a full 30-day window of real play. Details: [ludo-telemetry.md](ludo-telemetry.md) |
-| **Client path (Pulse run, ADR-015):** sessions started, game error rate, p95 frame time, % sessions with jank | Client-only and spoofable (public beacon). Shown as observations with the bound "Does not prove server capacity or ITSM readiness". Never an SLO or an alert |
+| **Server path (Ludo, ADR-026):** connection success (proposed 99.5%), action latency (≤ 100 ms server time, human actions only; proposed 99%), bot turn lag (one check per run of bot turns, every step ≤ 250 ms late; proposed 99%; split out in schema v2, 3 Oct 2026), round-trip time ≤ 300 ms (proposed 95%); lobby starts, turn timeouts and game completion tracked | Server-measured, so trustworthy, but volume depends on people playing. Promote to SLOs with budgets after a full 30-day window of real play. Details: [ludo-telemetry.md](ludo-telemetry.md) |
+| **Client path (Pulse run, ADR-015):** sessions, session error rate, frame time p95, jank rate (sessions with a frame over 50 ms) | Client-only and spoofable (public beacon). Shown as observations with the bound "Does not prove server capacity or ITSM readiness". Never an SLO or an alert |
 
 ## Error budget policy
 
@@ -37,7 +37,7 @@ Status: **draft, not adopted.** Every threshold and action marked `TODO` is the 
 
 What the budget is for: it says when reliability work comes before new features. The thresholds below turn the numbers on `/reliability/` into decisions, so a decision can be pointed to, not just a chart.
 
-**Scope.** SLO-1 (heartbeat freshness) and SLO-2 (scheduled job success) only. Ludo's and Pulse run's objectives are proposed, not SLOs, so they have no budget to spend yet. Free-tier capacity is never counted against a budget (capacity is not an incident).
+**Scope.** SLO-1 (availability, outside probe) and SLO-2 (cron job success) only. Ludo's and Pulse run's objectives are proposed, not SLOs, so they have no budget to spend yet. Free-tier capacity is never counted against a budget (capacity is not an incident).
 
 **Levels, by budget left in the rolling 30-day window** (the figure on each SLO card):
 

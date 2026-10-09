@@ -15,6 +15,9 @@ import { nextReset } from "./capacity";
 
 const KEY = "limits";
 const CI_KEY = "limits:ci";
+/** The reminder issues the daily workflow keeps (ADR-031), as it last reported them. */
+const TICKETS_KEY = "limits:tickets";
+const MAX_TICKETS = 10;
 const TIMEOUT_MS = 5_000;
 const EXPIRY_EVERY_MS = 24 * 3_600_000;
 const USAGE_EVERY_MS = 30 * 60_000;
@@ -299,6 +302,23 @@ export interface LimitsView {
   /** The previous UTC day's final totals, once re-read after the reset. */
   yesterday: { day: string; items: UsageView[] } | null;
   usage_note: string | null;
+  /** The reminder issues, newest first, as of the workflow's last report; null until it has reported once. */
+  tickets: { as_of: string; items: TicketView[] } | null;
+}
+
+/** A reminder issue as the incident desk shows it (ADR-031): the workflow's own issues, never free text from anyone. */
+export interface TicketView {
+  number: number;
+  title: string;
+  level: "P0" | "P1" | "P2" | "P3" | null;
+  state: "open" | "closed";
+  opened_at: string;
+  closed_at: string | null;
+  url: string;
+}
+interface TicketRecord {
+  reportedAt: string;
+  items: Omit<TicketView, "url">[];
 }
 
 /** Days until a date, by whole days from now (negative once it has passed). */
@@ -320,8 +340,11 @@ export function expiryStatus(c: Checked | undefined, now: number): Pick<ExpiryVi
 export async function readLimits(env: Env, now = Date.now()): Promise<LimitsView> {
   let rec: Record_ | null = null;
   let ci: CiReport | null = null;
+  let tix: TicketRecord | null = null;
   try {
-    [rec, ci] = env.PULSE ? await Promise.all([env.PULSE.get<Record_>(KEY, "json"), env.PULSE.get<CiReport>(CI_KEY, "json")]) : [null, null];
+    [rec, ci, tix] = env.PULSE
+      ? await Promise.all([env.PULSE.get<Record_>(KEY, "json"), env.PULSE.get<CiReport>(CI_KEY, "json"), env.PULSE.get<TicketRecord>(TICKETS_KEY, "json")])
+      : [null, null, null];
   } catch {
     // The status store is unreadable: every row says it could not be checked, which is the truth.
   }
@@ -367,7 +390,11 @@ export async function readLimits(env: Env, now = Date.now()): Promise<LimitsView
           }),
         }
       : null;
-  return { generated_at: new Date(now).toISOString(), expiries, usage, usage_note, yesterday };
+  // The link is built here from the number, never taken from the report.
+  const tickets = tix
+    ? { as_of: tix.reportedAt, items: tix.items.map((t) => ({ ...t, url: `https://github.com/${env.GITHUB_REPO}/issues/${t.number}` })) }
+    : null;
+  return { generated_at: new Date(now).toISOString(), expiries, usage, usage_note, yesterday, tickets };
 }
 
 export async function limitsApi(request: Request, env: Env): Promise<Response> {
@@ -392,13 +419,22 @@ async function ciReport(request: Request, env: Env, json: (b: unknown, s?: numbe
   const want = new TextEncoder().encode(env.LIMITS_REPORT_TOKEN);
   if (given.byteLength !== want.byteLength || !crypto.subtle.timingSafeEqual(given, want)) return json({ error: "unauthorized" }, 401);
   const raw = await request.text();
-  if (raw.length > 256) return json({ error: "too_large" }, 413);
+  // A date report is tiny; a ticket report (ADR-031) holds at most 10 short rows.
+  if (raw.length > 4_096) return json({ error: "too_large" }, 413);
   let body: unknown;
   try {
     body = JSON.parse(raw);
   } catch {
     return json({ error: "bad_json" }, 400);
   }
+  if (body && typeof body === "object" && "tickets" in body) {
+    const items = parseTickets((body as { tickets: unknown }).tickets);
+    if (!items || Object.keys(body).length !== 1) return json({ error: "bad_body" }, 400);
+    const rec: TicketRecord = { reportedAt: new Date().toISOString(), items };
+    await env.PULSE.put(TICKETS_KEY, JSON.stringify(rec));
+    return new Response(null, { status: 204 });
+  }
+  if (raw.length > 256) return json({ error: "too_large" }, 413);
   const b = body as { expires_at?: unknown; no_expiry?: unknown; domain_expires_at?: unknown };
   const badDomain = b.domain_expires_at !== undefined && b.domain_expires_at !== null && isoOrNull(b.domain_expires_at) === null;
   if (!body || typeof body !== "object" || typeof b.no_expiry !== "boolean" || (b.expires_at !== null && isoOrNull(b.expires_at) === null) || badDomain) {
@@ -412,4 +448,26 @@ async function ciReport(request: Request, env: Env, json: (b: unknown, s?: numbe
   };
   await env.PULSE.put(CI_KEY, JSON.stringify(report));
   return new Response(null, { status: 204 });
+}
+
+/**
+ * The workflow's ticket report, checked field by field: only the issues it raises itself ("Limits: …"), a known
+ * level, two states and real dates. Anything else refuses the whole report, so a bad run leaves the last good list.
+ */
+export function parseTickets(v: unknown): TicketRecord["items"] | null {
+  if (!Array.isArray(v) || v.length > MAX_TICKETS) return null;
+  const out: TicketRecord["items"] = [];
+  for (const t of v as Record<string, unknown>[]) {
+    if (!t || typeof t !== "object") return null;
+    const { number, title, level, state, opened_at, closed_at } = t;
+    if (typeof number !== "number" || !Number.isInteger(number) || number < 1 || number > 10_000_000) return null;
+    if (typeof title !== "string" || title.length > 100 || !/^Limits: [\w .,()'-]{1,90}$/.test(title)) return null;
+    if (level !== null && level !== "P0" && level !== "P1" && level !== "P2" && level !== "P3") return null;
+    if (state !== "open" && state !== "closed") return null;
+    const opened = isoOrNull(opened_at);
+    const closed = closed_at === null ? null : isoOrNull(closed_at);
+    if (!opened || (closed_at !== null && !closed) || (state === "closed") !== (closed !== null)) return null;
+    out.push({ number, title, level, state, opened_at: opened, closed_at: closed });
+  }
+  return out;
 }

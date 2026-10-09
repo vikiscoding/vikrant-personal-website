@@ -2,7 +2,7 @@
 
 What is live, what is verified, what is pending. Rewrite this file at the end of every working session to match reality; replace, do not append.
 
-Last updated: 6 Oct 2026. The site is feature-complete (see the note *This site as a product*); changes from here come from operating it.
+Last updated: 9 Oct 2026. The site is feature-complete (see the note *This site as a product*); changes from here come from operating it.
 
 ## Live
 
@@ -14,9 +14,9 @@ Last updated: 6 Oct 2026. The site is feature-complete (see the note *This site 
 | Heartbeat | A scheduled job every 10 min reads this repo's latest commit and CI status from GitHub into KV; the footer shows it; `/api/pulse` returns 200 while the snapshot is under 35 min old |
 | Outside probe | UptimeRobot keyword monitor on `/api/pulse` every 5 min; email alerts. SLO clock Day 0 = 30 Sep 2026 |
 | SLI ledger | Durable Object `SliLedger`: daily counts and histograms per source, failures in full, read per source so no source can crowd out another; public `/api/slo?days=N`. Refused writes are logged as `ledger_unrecorded` and rebuilt from Workers Logs on the next healthy run (ADR-028) |
-| Dashboard | `/reliability/`: the answer first (status, open incidents, dependencies needing attention), the collecting-data banner until 30 Oct 2026, live state, SLO cards with the budget left, the 30-day strip, speed (folded), the latest 5 failures with a link to `/reliability/failures/` (every kept failure, by day, game days marked), the dependency board, the incident desk, both testbeds. From a KV read copy when the ledger can't be read (ADR-029). The error budget burn-down appears on its own on 30 Oct 2026 |
+| Dashboard | `/reliability/`: the answer first (status, open incidents, dependencies needing attention), the collecting-data banner until 30 Oct 2026, live state, SLO cards with the budget left, the 30-day strip, speed (folded), the latest 5 failures with a link to `/reliability/failures/` (every kept failure, by day, game days marked), the dependency board, the incident desk (with low-priority tickets), both testbeds. Signals are named "what is measured (where from)" with a one-line SLI definition on each SLO card (ADR-031). From a KV read copy when the ledger can't be read (ADR-029). The error budget burn-down appears on its own on 30 Oct 2026 |
 | Dependency board | `/reliability/#limits` and `GET /api/limits` (ADR-030): six renewals, each read from its issuer daily, all green since 4 Oct 2026, 7:43 p.m.; today's use of five free-tier allowances, with yesterday's totals after the 00:00 UTC reset. The domain's expiry is read by the daily `limits` workflow, because the registries rate-limit Cloudflare's addresses. Reminder issues escalate P3 (90 days), P2 (60), P1 (30), P0 (expired) and close themselves |
-| Incident desk | 2 failed runs → `repository_dispatch` to the incident engine; owner `/commands` on GitHub Issues are the human gate; every AI priority waits for `/approve` (ADR-021); the site reads the engine's public `feed.json` (refreshed by the scheduled job) |
+| Incident desk | 2 failed runs → `repository_dispatch` to the incident engine; owner `/commands` on GitHub Issues are the human gate; every AI priority waits for `/approve` (ADR-021); the site reads the engine's public `feed.json` (refreshed by the scheduled job). Below it, the dependency reminder issues as low-priority tickets, reported by the daily `limits` workflow to `POST /api/limits/ci` after it updates them (ADR-031); each incident shows its priority |
 | Pulse run | `/play/`: validated `POST /api/rum`, no IP, user agent or cookie |
 | Ludo | `/ludo/` (ADR-026, ADR-027): one Durable Object per room; solo vs bots or up to four players on an invite link; bots capture first; a late joiner takes a bot's seat; an away player's seat is played at bot pace, labelled "(away)", and goes back to the bot after 2 minutes; a game everyone has left ends (at once on Leave, after 1 minute otherwise). Names and chat stay in the room. Server-measured SLIs on `/reliability/#ludo`. Details: `docs/ludo-telemetry.md` |
 | Visit counter | Counting, hidden until 1,000 views (`VISITS_MODE=auto`) |
@@ -24,7 +24,7 @@ Last updated: 6 Oct 2026. The site is feature-complete (see the note *This site 
 
 ## Verified
 
-- `npm run check` (CI and locally): Astro and Worker typechecks, and 13 dashboard checks in `scripts/check-dashboard.mjs` (the burn-down's gate, the budget bar, the failure list and history, the dependency statuses and their sources). Each dashboard check was seen to fail against a deliberately broken dashboard.
+- `npm run check` (CI and locally): Astro and Worker typechecks, and 15 dashboard checks in `scripts/check-dashboard.mjs` (the burn-down's gate, the budget bar, the failure list and history, the dependency statuses and their sources, the ticket report's validation and the tickets on the desk). Each dashboard check was seen to fail against a deliberately broken dashboard.
 - Game day 1 (1 Oct 2026): raised by the site, triaged, worked through the human gate, recovery reported automatically. Record `docs/gamedays/2026-10-01-github_5xx.md`; postmortem `/notes/postmortem-game-day-1/`.
 - Free-tier incident (2 Oct 2026, self-inflicted): every page served, the heartbeat stayed fresh, no incident opened; the capacity messages worked live. Record `docs/incidents/2026-10-02-free-tier-writes.md`; postmortem `/notes/postmortem-free-tier-writes/`.
 - The failure-list fix (4 Oct 2026): after the deploy, all 12 site failures of the window were back on the page, matching the daily totals.
@@ -33,6 +33,8 @@ Last updated: 6 Oct 2026. The site is feature-complete (see the note *This site 
 - Live desk policy: `TRIAGE_AUTO_APPLY=off`, so a confident Low still waits for `/approve` (engine test `test_live_desk_never_auto_applies_even_low`).
 
 ## Pending
+
+- **Tickets on the desk (ADR-031, branch `reliability/names-and-tickets`):** checked locally on `wrangler dev` (wrong token 401, bad bodies 400, the date report unchanged, tickets rendered). Not yet seen live: after merge, the list stays "Not reported yet" until the next daily `limits` run (13:17 UTC) or a manual run of that workflow.
 
 - **Game day 2** (run 2 Oct 2026): write its record in `docs/gamedays/` from the template, including whether the alert reached the owner.
 - **Error budget policy:** drafted in `docs/slo.md`; every threshold is `TODO` for the owner. Not adopted, and no page says the site follows it.
