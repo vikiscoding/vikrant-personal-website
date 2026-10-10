@@ -5,6 +5,7 @@ import { rumApi } from "./rum";
 import { sloApi } from "./slo";
 import { runTicker } from "./ticker";
 import { limitsApi, refreshLimits } from "./limits";
+import { refreshRuns } from "./incidents";
 
 export { VisitCounter } from "./visits";
 export { SliLedger } from "./ledger";
@@ -35,9 +36,10 @@ export default {
     return servePage(request, env, ctx);
   },
 
-  async scheduled(_controller, env, ctx): Promise<void> {
+  async scheduled(controller, env, ctx): Promise<void> {
     // Beside the scheduled job, never inside it: a limits check can never fail or slow a run (ADR-030).
     ctx.waitUntil(refreshLimits(env));
+    ctx.waitUntil(refreshRuns(env, controller.scheduledTime));
     await runTicker(env, ctx);
   },
 } satisfies ExportedHandler<Env>;

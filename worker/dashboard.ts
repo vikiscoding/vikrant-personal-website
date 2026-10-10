@@ -5,7 +5,7 @@ import type { DayRow, EventRow, LedgerSource } from "./ledger";
 import type { Pulse } from "./pulse";
 import { TARGETS, type SloWindow } from "./slo";
 import { addDays, localDay, localStamp } from "./time";
-import type { Feed, FeedIncident } from "./incidents";
+import type { FailedRun, Feed, FeedIncident, RunsRecord } from "./incidents";
 import type { Gap } from "./backfill";
 import { nextReset } from "./capacity";
 import type { ExpiryStatus, LimitsView, TicketView } from "./limits";
@@ -467,8 +467,8 @@ function trail(i: FeedIncident): string {
  * paged, never counted in "open incidents". Open ones first; closed ones folded.
  */
 function ticketList(t: LimitsView["tickets"] | undefined, now: number): string {
-  const head = `<h3 class="dash-sub">Low-priority tickets</h3>
-    <p class="dash-small dash-muted">Raised by the daily dependency check, not by a failure: a renewal or expiry the owner needs to act on before anything breaks. They open at P3 (90 days out) and escalate to P2, P1 and P0 as the date nears; they never page anyone, and close themselves once fixed.</p>`;
+  const head = `<h4 class="dash-small"><strong>Renewal reminders</strong></h4>
+    <p class="dash-small dash-muted">Raised by the daily dependency check: a renewal or expiry the owner needs to act on before anything breaks. They open at P3 (90 days out), escalate to P2, P1 and P0 as the date nears, and close themselves once fixed.</p>`;
   if (!t) return `${head}<p class="dash-small">Not reported yet: the daily check sends its tickets after its next run.</p>`;
   const one = (x: TicketView) => {
     const level = x.level ? `<span class="dash-badge" data-state="${x.state === "closed" ? "none" : x.level === "P3" ? "warn" : "bad"}">${x.level}</span>` : "";
@@ -487,7 +487,28 @@ function ticketList(t: LimitsView["tickets"] | undefined, now: number): string {
   return `${head}${list}${fold}<p class="dash-small dash-muted">As of the daily check, ${esc(localStamp(t.as_of))} · <a href="#limits">the dependency board</a></p>`;
 }
 
-function incidentDesk(feed: Feed | null, tickets: LimitsView["tickets"] | undefined, now: number): string {
+/**
+ * Failed GitHub Actions runs, last 30 days (ADR-031): a failed deploy leaves the last good version serving, so it is
+ * low priority, not an incident. "Fixed" means a later run of the same workflow passed. Unfixed first; fixed folded.
+ */
+function runList(r: RunsRecord | null): string {
+  const head = `<h4 class="dash-small"><strong>Failed workflow runs</strong> <span class="dash-muted">· last 30 days</span></h4>
+    <p class="dash-small dash-muted">The build-and-deploy pipeline and the daily dependency check run as GitHub Actions. When one fails, the live site keeps serving the last good version, so it is listed here rather than raised as an incident.</p>`;
+  if (!r) return `${head}<p class="dash-small">Not read yet: the list is read from GitHub once an hour.</p>`;
+  const one = (x: FailedRun) => `<li>
+            <p class="dash-incident-head"><span class="dash-badge" data-state="${x.resolved ? "good" : "warn"}">${x.resolved ? "FIXED" : "FAILED"}</span><span class="dash-badge" data-state="none">LOW</span><a href="https://github.com/${esc(r.repo)}/actions/runs/${x.id}">${esc(x.workflow)}</a> <span class="dash-muted">${esc(x.conclusion.replace(/_/g, " "))}</span></p>
+            <p class="dash-small dash-muted">${esc(localStamp(x.at))}${x.resolved ? " · a later run passed" : ""}</p>
+          </li>`;
+  const open = r.items.filter((x) => !x.resolved);
+  const fixed = r.items.filter((x) => x.resolved);
+  const list = open.length ? `<ol class="dash-incidents">${open.map(one).join("")}</ol>` : `<p class="dash-small">${fixed.length ? "None unfixed." : "None in the last 30 days."}</p>`;
+  const fold = fixed.length
+    ? `<details class="dash-fold"><summary>${n(fixed.length)} fixed by a later run</summary><ol class="dash-incidents">${fixed.map(one).join("")}</ol></details>`
+    : "";
+  return `${head}${list}${fold}<p class="dash-small dash-muted">Read hourly from GitHub; as of ${esc(localStamp(r.checkedAt))} · <a href="https://github.com/${esc(r.repo)}/actions">all runs</a></p>`;
+}
+
+function incidentDesk(feed: Feed | null, tickets: LimitsView["tickets"] | undefined, runs: RunsRecord | null, now: number): string {
   const repo = feed?.repo ? `https://github.com/${esc(feed.repo)}` : null;
   const items = (feed?.incidents ?? []).slice(0, 5);
   const one = (i: FeedIncident) => {
@@ -519,7 +540,10 @@ function incidentDesk(feed: Feed | null, tickets: LimitsView["tickets"] | undefi
     <h2>Incident desk</h2>
     <p class="dash-small dash-muted">Real failures of this site go to an incident triage agent. It proposes priority and drafts updates; a human runs every step after that, in public GitHub issues.</p>
     ${list}
+    <h3 class="dash-sub">Low-priority tickets</h3>
+    <p class="dash-small dash-muted">Below incident level: they never page anyone and are never counted as incidents.</p>
     ${ticketList(tickets, now)}
+    ${runList(runs)}
     <p class="dash-small dash-muted">Incidents are alerts from this site only; tests are titled as tests. AI drafts are never sent. Since 1 Oct 2026, every AI priority waits for a human approval; each entry's gate says which rule applied when it was triaged. AI priority never pages anyone: paging comes from the outside probe on this site's SLO. After intake, every state change is a human command.${
       repo ? ` <a href="${repo}">Engine repo →</a>` : ""
     }</p>
@@ -583,6 +607,7 @@ export function renderDashboard(
   gap: Gap | null = null,
   copy: { asOf: string; capacity: boolean } | null = null,
   limits: LimitsView | null = null,
+  runs: RunsRecord | null = null,
 ): string {
   const firstDay = win.days[0]?.day;
   const daysWithData = new Set(win.days.map((d) => d.day)).size;
@@ -596,7 +621,7 @@ export function renderDashboard(
     openIncidents === 0 ? "no open incidents" : `${n(openIncidents)} open incident${openIncidents === 1 ? "" : "s"}`
   }${(() => {
     // Tickets are counted apart from incidents (ADR-031), and only when there is one to see.
-    const t = limits?.tickets?.items.filter((x) => x.state === "open").length ?? 0;
+    const t = (limits?.tickets?.items.filter((x) => x.state === "open").length ?? 0) + (runs?.items.filter((x) => !x.resolved).length ?? 0);
     return t ? ` · <a href="#incident-desk">${n(t)} open low-priority ticket${t === 1 ? "" : "s"}</a>` : "";
   })()}${
     limits
@@ -617,7 +642,7 @@ export function renderDashboard(
     ${speed(win.days, now)}
     ${failures(win.events)}
     ${limits ? limitsSection(limits, now) : ""}
-    ${incidentDesk(feed, limits?.tickets, now)}
+    ${incidentDesk(feed, limits?.tickets, runs, now)}
     ${clientPath(win)}
     ${ludoSection(win)}
     <details class="dash-fold dash-howto">

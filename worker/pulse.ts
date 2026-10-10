@@ -10,7 +10,7 @@ import { SNAPSHOT_KEY, type Snapshot } from "./ticker";
 import { countVisit, isCountable, visitsText } from "./visits";
 import { dashboardMode, renderDashboard, renderHistory, SITE_SOURCES, WINDOW_DAYS } from "./dashboard";
 import { readSloCopy, readWindow } from "./slo";
-import { readDeskState, readFeed } from "./incidents";
+import { readDeskState, readFeed, readRuns } from "./incidents";
 import { readGap } from "./backfill";
 
 /** Stale after 35 min: two missed ticks (10 min apart) plus one tick of margin. At 30 min, a 2-tick outage hit
@@ -111,14 +111,14 @@ async function dashboardHtml(env: Env): Promise<string | null> {
     if (!win) return unavailable();
     const daysWithData = new Set(win.days.map((d) => d.day)).size;
     if (mode === "auto" && daysWithData < WINDOW_DAYS) return null;
-    const [pulse, feed, desk, gap, limits] = await Promise.all([readPulse(env).catch(() => null), readFeed(env), readDeskState(env), readGap(env), readLimits(env)]);
-    return renderDashboard(win, pulse, feed, desk, Date.now(), gap, null, limits);
+    const [pulse, feed, desk, gap, limits, runs] = await Promise.all([readPulse(env).catch(() => null), readFeed(env), readDeskState(env), readGap(env), readLimits(env), readRuns(env)]);
+    return renderDashboard(win, pulse, feed, desk, Date.now(), gap, null, limits, runs);
   } catch (e) {
     // The ledger cannot be read (capacity or outage): show the last saved copy of the records, clearly labelled.
     const copy = await readSloCopy(env);
     if (copy) {
-      const [pulse, feed, desk, gap, limits] = await Promise.all([readPulse(env).catch(() => null), readFeed(env), readDeskState(env), readGap(env), readLimits(env)]);
-      return renderDashboard(copy.window, pulse, feed, desk, Date.now(), gap, { asOf: copy.saved_at, capacity: isCapacity(e) }, limits);
+      const [pulse, feed, desk, gap, limits, runs] = await Promise.all([readPulse(env).catch(() => null), readFeed(env), readDeskState(env), readGap(env), readLimits(env), readRuns(env)]);
+      return renderDashboard(copy.window, pulse, feed, desk, Date.now(), gap, { asOf: copy.saved_at, capacity: isCapacity(e) }, limits, runs);
     }
     if (isCapacity(e)) return capacityCard();
     console.error(JSON.stringify({ v: 2, ts: new Date().toISOString(), op: "dashboard", outcome: "error", detail: e instanceof Error ? e.message : "render failed" }));

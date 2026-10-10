@@ -240,6 +240,30 @@ check("tickets: the report is checked field by field", () => {
   console.log("ok - tickets: listed on the desk, open first, counted apart from incidents");
   passed++;
 }
+// Failed workflow runs (ADR-031): failures only, inside 30 days, "fixed" once a later run of the same workflow passed.
+const { failedRuns } = await import("../worker/incidents.ts");
+{
+  const now = Date.parse("2026-10-10T12:00:00Z");
+  const run = (id, name, conclusion, daysAgo) => ({ id, name, conclusion, status: "completed", created_at: new Date(now - daysAgo * 86_400_000).toISOString() });
+  const runs = [
+    run(6, "limits", "failure", 0.1),
+    run(5, "ci-cd", "success", 1),
+    run(4, "ci-cd", "failure", 2),
+    run(3, "ci-cd", "cancelled", 3),
+    run(2, "limits", "success", 4),
+    run(1, "ci-cd", "timed_out", 40),
+  ];
+  const f = failedRuns(runs, now);
+  assert.deepEqual(f.map((x) => [x.id, x.resolved]), [[6, false], [4, true]]);
+  const rec = { checkedAt: new Date(now).toISOString(), repo: "o/r", items: f };
+  const html = renderDashboard(window(now, 30), null, null, null, now, null, null, null, rec);
+  assert.match(html, /1 open low-priority ticket</);
+  assert.match(html, /FAILED<\/span><span class="dash-badge" data-state="none">LOW<\/span><a href="https:\/\/github.com\/o\/r\/actions\/runs\/6">limits<\/a>/);
+  assert.match(html, /1 fixed by a later run/);
+  assert.match(renderDashboard(window(now, 30), null, null, null, now), /Not read yet: the list is read from GitHub once an hour/);
+  console.log("ok - failed workflow runs: failures in the window, fixed by a later pass, counted as low priority");
+  passed++;
+}
 check("GitHub's token-expiry header is read in both of its formats", () => {
   assert.equal(parseGithubExpiry("2027-08-30 00:00:00 UTC"), "2027-08-30T00:00:00.000Z");
   assert.equal(parseGithubExpiry("2027-08-30 00:00:00 -0700"), "2027-08-30T07:00:00.000Z");

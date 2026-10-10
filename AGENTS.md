@@ -18,7 +18,7 @@ The owner's personal site (headline, proof items, résumé, contact) plus a smal
 | `worker/pulse.ts` | Snapshot read, page injection (degrade open), probe endpoint |
 | `worker/ledger.ts`, `worker/slo.ts` | SLI ledger (Durable Object) and the SLO window |
 | `worker/dashboard.ts` | Server-rendered `/reliability/` |
-| `worker/incidents.ts` | Incident desk: dispatch to the engine, read its feed |
+| `worker/incidents.ts` | Incident desk: dispatch to the engine, read its feed, and read failed GitHub Actions runs hourly (ADR-031) |
 | `worker/rum.ts` | Pulse run telemetry endpoint (a public write path, with `/api/ludo`) |
 | `worker/log.ts` | The one log/SLI event shape (`docs/log-schema.md`) |
 | `worker/faults.ts` | Deploy-time game-day switch |

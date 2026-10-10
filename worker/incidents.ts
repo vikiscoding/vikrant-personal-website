@@ -140,3 +140,68 @@ export async function readFeed(env: Env): Promise<Feed | null> {
     return null;
   }
 }
+
+/*
+ * Failed GitHub Actions runs (ADR-031, 10 Oct 2026): a failed deploy or limits check is a low-priority incident in
+ * the ordinary sense (the live site keeps serving the last good version), so the desk lists it beside the tickets.
+ * Read hourly beside the scheduled job, never inside it, with the token the job already holds. Only the workflow's
+ * name, outcome, time and run id are kept: never who triggered it, the branch or the commit message.
+ */
+const RUNS_KEY = "incidents:runs";
+const RUNS_WINDOW_MS = 30 * 86_400_000;
+const FAILED = new Set(["failure", "timed_out", "startup_failure"]);
+
+export interface FailedRun {
+  id: number;
+  workflow: string;
+  conclusion: string;
+  at: string;
+  /** A later run of the same workflow succeeded. */
+  resolved: boolean;
+}
+export interface RunsRecord {
+  checkedAt: string;
+  /** "owner/name" from the Worker's own config, for the run links. */
+  repo: string;
+  items: FailedRun[];
+}
+
+type ApiRun = { id: number; name: string | null; conclusion: string | null; status: string; created_at: string };
+
+/** Newest first in, newest first out: each failure of the window, and whether a later run of its workflow passed. */
+export function failedRuns(runs: ApiRun[], now: number): FailedRun[] {
+  const out: FailedRun[] = [];
+  runs.forEach((r, i) => {
+    if (!r.conclusion || !FAILED.has(r.conclusion) || now - Date.parse(r.created_at) > RUNS_WINDOW_MS) return;
+    const resolved = runs.slice(0, i).some((later) => later.name === r.name && later.conclusion === "success");
+    out.push({ id: r.id, workflow: (r.name ?? "workflow").slice(0, 60), conclusion: r.conclusion, at: r.created_at, resolved });
+  });
+  return out.slice(0, 20);
+}
+
+/** Once an hour (the first tick of each hour), from the scheduled handler's waitUntil. Never throws. */
+export async function refreshRuns(env: Env, scheduledTime: number): Promise<void> {
+  if (!env.PULSE || new Date(scheduledTime).getUTCMinutes() >= 10) return;
+  try {
+    const headers: Record<string, string> = { Accept: "application/vnd.github+json", "User-Agent": "vikrantsingh-fyi-incident-desk", "X-GitHub-Api-Version": "2022-11-28" };
+    const token = env.GITHUB_TOKEN?.trim();
+    if (token) headers.Authorization = `Bearer ${token}`;
+    const res = await fetch(`https://api.github.com/repos/${env.GITHUB_REPO}/actions/runs?per_page=100`, { headers, signal: AbortSignal.timeout(5_000) });
+    if (!res.ok) return; // the last good list stays; its "as of" time says how old it is
+    const body = (await res.json()) as { workflow_runs?: ApiRun[] };
+    if (!Array.isArray(body.workflow_runs)) return;
+    const rec: RunsRecord = { checkedAt: new Date().toISOString(), repo: env.GITHUB_REPO, items: failedRuns(body.workflow_runs, Date.now()) };
+    await env.PULSE.put(RUNS_KEY, JSON.stringify(rec));
+  } catch {
+    // Optional, like the feed: the next hour tries again.
+  }
+}
+
+export async function readRuns(env: Env): Promise<RunsRecord | null> {
+  if (!env.PULSE) return null;
+  try {
+    return await env.PULSE.get<RunsRecord>(RUNS_KEY, "json");
+  } catch {
+    return null;
+  }
+}
