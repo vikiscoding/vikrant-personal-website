@@ -34,7 +34,7 @@ Last updated: 10 Oct 2026. The site is feature-complete (see the note *This site
 
 ## Pending
 
-- **Tickets on the desk (ADR-031):** names and the ticket section live since 10 Oct 2026 (`e98bcca`); the reminder list says "Not reported yet" until the next daily `limits` run. Failed workflow runs (branch `reliability/failed-workflow-runs`): read from GitHub on `wrangler dev` with the hourly gate bypassed for one run ("None in the last 30 days", correct); not yet live.
+- **Low-priority tickets (ADR-031), live since 10 Oct 2026 (`1145d49`):** the reminder list says "Not reported yet" until the next daily `limits` run; the failed-runs list says "Not read yet" until the first scheduled run at the top of an hour. Both seen working only on `wrangler dev` so far; confirm on the live page after those runs.
 
 - **Game day 2** (run 2 Oct 2026): write its record in `docs/gamedays/` from the template, including whether the alert reached the owner.
 - **Error budget policy:** drafted in `docs/slo.md`; every threshold is `TODO` for the owner. Not adopted, and no page says the site follows it.
