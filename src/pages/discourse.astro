@@ -1,0 +1,186 @@
+---
+// Discourse: private two-person chat (worker/discourse/). Deliberately standalone: no site nav, footer or share tags,
+// not linked from anywhere, noindex. Delete this file with worker/discourse/ to remove the feature.
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Discourse</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  </head>
+  <body>
+    <main class="gate" data-gate hidden>
+      <form data-login autocomplete="off">
+        <h1>Discourse</h1>
+        <input type="password" data-code placeholder="Passcode" aria-label="Passcode" autocomplete="current-password" maxlength="128" required />
+        <button type="submit">Enter</button>
+        <p class="note" data-gate-note role="status"></p>
+      </form>
+    </main>
+
+    <main class="chat" data-chat hidden>
+      <header>
+        <strong data-who></strong>
+        <span class="dot" data-dot title="offline"></span>
+        <span class="spacer"></span>
+        <button type="button" data-toggle-pass>Passcode</button>
+        <button type="button" data-logout>Leave</button>
+      </header>
+      <form class="pass" data-pass hidden autocomplete="off">
+        <input type="password" data-cur placeholder="Current passcode" aria-label="Current passcode" maxlength="128" required />
+        <input type="password" data-new placeholder="New passcode (6+ characters)" aria-label="New passcode" maxlength="64" minlength="6" required />
+        <button type="submit">Change</button>
+        <span class="note" data-pass-note role="status"></span>
+      </form>
+      <ol class="log" data-log aria-live="polite"></ol>
+      <p class="note banner" data-banner hidden></p>
+      <form class="compose" data-compose autocomplete="off">
+        <input data-text placeholder="Write something" aria-label="Message" maxlength="1000" required />
+        <button type="submit">Send</button>
+      </form>
+    </main>
+
+    <script is:inline>
+      (function () {
+        var $ = function (s) { return document.querySelector(s); };
+        var gate = $("[data-gate]"), chat = $("[data-chat]"), log = $("[data-log]"), banner = $("[data-banner]");
+        var me = null, admin = false, ws = null, retry = 1000, closing = false;
+        var NAMES = { girl: "Girl", boy: "Boy" };
+
+        function api(path, body) {
+          return fetch("/discourse/api/" + path, body === undefined ? { credentials: "same-origin" } : {
+            method: "POST", credentials: "same-origin",
+            headers: { "content-type": "application/json" }, body: JSON.stringify(body)
+          });
+        }
+        function showGate() {
+          closing = true; if (ws) { try { ws.close(); } catch (e) {} }
+          me = null; chat.hidden = true; gate.hidden = false; log.textContent = "";
+          $("[data-code]").value = ""; $("[data-code]").focus();
+        }
+        function showChat() {
+          gate.hidden = true; chat.hidden = false;
+          $("[data-who]").textContent = NAMES[me];
+          connect();
+        }
+        function bubble(m) {
+          var li = document.createElement("li");
+          li.dataset.id = m.id; li.className = m.role === me ? "mine" : "theirs";
+          var t = document.createElement("span"); t.className = "text"; t.textContent = m.text;
+          var time = document.createElement("time"); time.textContent = new Date(m.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+          li.append(t, time);
+          if (admin) {
+            var d = document.createElement("button"); d.type = "button"; d.className = "del"; d.textContent = "✕"; d.title = "Delete";
+            d.setAttribute("aria-label", "Delete message");
+            d.onclick = function () { send({ t: "del", id: m.id }); };
+            li.append(d);
+          }
+          return li;
+        }
+        function add(m) {
+          var stick = log.scrollHeight - log.scrollTop - log.clientHeight < 80;
+          log.append(bubble(m));
+          if (stick || m.role === me) log.scrollTop = log.scrollHeight;
+        }
+        function presence(online) {
+          var other = me === "girl" ? "boy" : "girl", on = online.indexOf(other) >= 0;
+          var dot = $("[data-dot]"); dot.dataset.on = on ? "1" : ""; dot.title = NAMES[other] + (on ? " is here" : " is away");
+        }
+        function send(o) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); }
+        function say(text) { banner.hidden = !text; banner.textContent = text || ""; }
+
+        function connect() {
+          closing = false;
+          ws = new WebSocket((location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/discourse/api/ws");
+          ws.onmessage = function (e) {
+            var f; try { f = JSON.parse(e.data); } catch (x) { return; }
+            if (f.t === "hello") {
+              me = f.me; admin = f.admin; retry = 1000; say("");
+              log.textContent = ""; f.msgs.forEach(add); log.scrollTop = log.scrollHeight; presence(f.online);
+            } else if (f.t === "msg") add(f.m);
+            else if (f.t === "del") { var li = log.querySelector('[data-id="' + f.id + '"]'); if (li) li.remove(); }
+            else if (f.t === "presence") presence(f.online);
+          };
+          ws.onclose = function () {
+            if (closing) return;
+            // Signed out elsewhere, or the server is resting: ask, then either go back to the gate or retry.
+            api("me").then(function (r) {
+              if (r.status === 401) { showGate(); return; }
+              say("Reconnecting…"); setTimeout(connect, retry); retry = Math.min(retry * 2, 15000);
+            }).catch(function () { say("Reconnecting…"); setTimeout(connect, retry); retry = Math.min(retry * 2, 15000); });
+          };
+        }
+
+        $("[data-login]").onsubmit = function (e) {
+          e.preventDefault();
+          var note = $("[data-gate-note]"); note.textContent = "";
+          api("login", { passcode: $("[data-code]").value }).then(function (r) {
+            if (r.ok) return r.json().then(function (j) { me = j.role; admin = j.role === "boy"; showChat(); });
+            note.textContent = r.status === 429 ? "Too many tries. Wait a while." : r.status === 503 ? "Resting. Try later." : "No.";
+          }).catch(function () { note.textContent = "Can't reach the server."; });
+        };
+        $("[data-compose]").onsubmit = function (e) {
+          e.preventDefault();
+          var i = $("[data-text]"), v = i.value.trim();
+          if (v) { send({ t: "send", text: v }); i.value = ""; }
+        };
+        $("[data-logout]").onclick = function () { api("logout", {}).finally(showGate); };
+        $("[data-toggle-pass]").onclick = function () { var f = $("[data-pass]"); f.hidden = !f.hidden; $("[data-pass-note]").textContent = ""; };
+        $("[data-pass]").onsubmit = function (e) {
+          e.preventDefault();
+          var note = $("[data-pass-note]");
+          api("passcode", { current: $("[data-cur]").value, next: $("[data-new]").value }).then(function (r) {
+            if (r.ok) { note.textContent = "Changed."; $("[data-cur]").value = ""; $("[data-new]").value = ""; return; }
+            return r.json().then(function (j) {
+              note.textContent = j.error === "wrong" ? "Current passcode is wrong." : j.error === "length" ? "Use 6 to 64 characters." : j.error === "taken" ? "Pick a different one." : j.error === "locked" ? "Too many tries. Wait a while." : "Not now.";
+            });
+          }).catch(function () { note.textContent = "Can't reach the server."; });
+        };
+
+        api("me").then(function (r) {
+          if (!r.ok) { gate.hidden = false; $("[data-code]").focus(); return; }
+          return r.json().then(function (j) { me = j.role; admin = j.admin; showChat(); });
+        }).catch(function () { gate.hidden = false; });
+      })();
+    </script>
+  </body>
+</html>
+
+<style is:global>
+  :root { --bg: #fbfbf9; --fg: #1b1b1a; --muted: #5d5d58; --line: #e2e1dc; --surface: #f3f2ee; --accent: #1f5f8b; --mine: #dbe9f4; --on: #2f7d4f; color-scheme: light dark; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #141413; --fg: #ececea; --muted: #a3a39e; --line: #2e2e2b; --surface: #1c1c1a; --accent: #7ab4dc; --mine: #22384a; --on: #5fbf85; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 1rem/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  [hidden] { display: none !important; }
+  input, button { font: inherit; color: inherit; border: 1px solid var(--line); border-radius: 0.5rem; background: var(--surface); padding: 0.55rem 0.75rem; }
+  button { cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  h1 { font-size: 1.5rem; margin: 0 0 1rem; }
+  .gate { min-height: 100dvh; display: grid; place-items: center; padding: 1rem; }
+  .gate form { display: grid; gap: 0.75rem; width: min(20rem, 100%); }
+  .note { color: var(--muted); font-size: 0.875rem; margin: 0; min-height: 1.2em; }
+  .chat { display: flex; flex-direction: column; height: 100dvh; max-width: 42rem; margin: 0 auto; padding: 0.75rem 1rem; gap: 0.5rem; }
+  .chat header { display: flex; align-items: center; gap: 0.6rem; }
+  .chat header button { padding: 0.25rem 0.6rem; font-size: 0.875rem; }
+  .spacer { flex: 1; }
+  .dot { width: 0.6rem; height: 0.6rem; border-radius: 50%; background: var(--line); }
+  .dot[data-on="1"] { background: var(--on); }
+  .pass { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+  .pass input { flex: 1 1 10rem; min-width: 0; }
+  .log { flex: 1; overflow-y: auto; list-style: none; margin: 0; padding: 0.5rem 0; display: flex; flex-direction: column; gap: 0.4rem; }
+  .log li { display: flex; align-items: baseline; gap: 0.5rem; max-width: 85%; padding: 0.4rem 0.7rem; border-radius: 0.75rem; background: var(--surface); }
+  .log li.mine { align-self: flex-end; background: var(--mine); }
+  .log .text { white-space: pre-wrap; overflow-wrap: anywhere; }
+  .log time { color: var(--muted); font-size: 0.75rem; flex: none; }
+  .log .del { padding: 0 0.35rem; border: 0; background: none; color: var(--muted); }
+  .log .del:hover { color: #b83a3a; }
+  .compose { display: flex; gap: 0.5rem; }
+  .compose input { flex: 1; min-width: 0; }
+  .banner { text-align: center; }
+</style>
