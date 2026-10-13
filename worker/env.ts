@@ -29,4 +29,9 @@ export interface Env {
    *  the Cloudflare dashboard; the second also as a GitHub Actions secret. */
   CF_ANALYTICS_TOKEN?: string;
   LIMITS_REPORT_TOKEN?: string;
+  /** Discourse (worker/discourse/): the private chat room, and the two starting passcodes. Set as Worker secrets in the
+   *  Cloudflare dashboard; used only until a profile changes its own passcode. They do not expire. */
+  DISCOURSE?: DurableObjectNamespace<import("./discourse/room").DiscourseRoom>;
+  DISCOURSE_GIRL_CODE?: string;
+  DISCOURSE_BOY_CODE?: string;
 }

@@ -6,7 +6,9 @@ import { sloApi } from "./slo";
 import { runTicker } from "./ticker";
 import { limitsApi, refreshLimits } from "./limits";
 import { refreshRuns } from "./incidents";
+import { discourseApi } from "./discourse/route";
 
+export { DiscourseRoom } from "./discourse/room";
 export { VisitCounter } from "./visits";
 export { SliLedger } from "./ledger";
 export { LudoRoom } from "./ludo/room";
@@ -22,6 +24,7 @@ export default {
       return Response.redirect(url.toString(), 301);
     }
     const { pathname } = url;
+    if (pathname.startsWith("/discourse/api/")) return discourseApi(request, env);
     if (pathname === "/api/pulse" && request.method === "GET") return pulseApi(env, ctx);
     if (pathname === "/api/slo" && request.method === "GET") return sloApi(env, url);
     if (pathname === "/api/rum") return rumApi(request, env, ctx);

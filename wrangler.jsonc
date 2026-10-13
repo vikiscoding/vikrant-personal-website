@@ -36,13 +36,16 @@
       { "name": "VISITS", "class_name": "VisitCounter" },
       { "name": "LEDGER", "class_name": "SliLedger" },
       // Ludo rooms (docs/ludo-telemetry.md): one per room, WebSockets with hibernation.
-      { "name": "LUDO", "class_name": "LudoRoom" }
+      { "name": "LUDO", "class_name": "LudoRoom" },
+      // Discourse (worker/discourse/): private two-person chat. Remove this line and the v4 migration to take it out.
+      { "name": "DISCOURSE", "class_name": "DiscourseRoom" }
     ]
   },
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["VisitCounter"] },
     { "tag": "v2", "new_sqlite_classes": ["SliLedger"] },
-    { "tag": "v3", "new_sqlite_classes": ["LudoRoom"] }
+    { "tag": "v3", "new_sqlite_classes": ["LudoRoom"] },
+    { "tag": "v4", "new_sqlite_classes": ["DiscourseRoom"] }
   ],
   "vars": {
     // Game-day switch. Changed only by a deploy, never by a request (ADR-010).
@@ -77,7 +80,8 @@
         "bindings": [
           { "name": "VISITS", "class_name": "VisitCounter" },
           { "name": "LEDGER", "class_name": "SliLedger" },
-          { "name": "LUDO", "class_name": "LudoRoom" }
+          { "name": "LUDO", "class_name": "LudoRoom" },
+          { "name": "DISCOURSE", "class_name": "DiscourseRoom" }
         ]
       },
       "vars": {
