@@ -19,6 +19,7 @@ Last updated: 10 Oct 2026. The site is feature-complete (see the note *This site
 | Incident desk | 2 failed runs → `repository_dispatch` to the incident engine; owner `/commands` on GitHub Issues are the human gate; every AI priority waits for `/approve` (ADR-021); the site reads the engine's public `feed.json` (refreshed by the scheduled job). Below it, low-priority tickets: failed GitHub Actions runs of the last 30 days (read hourly by the Worker) and the dependency reminder issues, reported by the daily `limits` workflow to `POST /api/limits/ci` after it updates them (ADR-031); each incident shows its priority |
 | Pulse run | `/play/`: validated `POST /api/rum`, no IP, user agent or cookie |
 | Ludo | `/ludo/` (ADR-026, ADR-027): one Durable Object per room; solo vs bots or up to four players on an invite link; bots capture first; a late joiner takes a bot's seat; an away player's seat is played at bot pace, labelled "(away)", and goes back to the bot after 2 minutes; a game everyone has left ends (at once on Leave, after 1 minute otherwise). Names and chat stay in the room. Server-measured SLIs on `/reliability/#ludo`. Details: `docs/ludo-telemetry.md` |
+| Page analytics | Umami Cloud, cookieless (ADR-032): one tag in `Base.astro`, production builds only, `data-domains="vikrantsingh.fyi"`, Do Not Track respected; events `resume-download` and `contact-click` on the home links; named on `/privacy` |
 | Visit counter | Counting, hidden until 1,000 views (`VISITS_MODE=auto`) |
 | Brand | Favicon set and 1200×630 share image from `scripts/make-brand-assets.py` |
 
@@ -34,6 +35,7 @@ Last updated: 10 Oct 2026. The site is feature-complete (see the note *This site
 
 ## Pending
 
+- **Page analytics (ADR-032):** built 9 Nov 2026; the built pages carry the tag once and `astro dev` does not. A first visit and both events seen in the Umami dashboard are not yet verified.
 - **Low-priority tickets (ADR-031), live since 10 Oct 2026 (`1145d49`):** the reminder list says "Not reported yet" until the next daily `limits` run; the failed-runs list says "Not read yet" until the first scheduled run at the top of an hour. Both seen working only on `wrangler dev` so far; confirm on the live page after those runs.
 
 - **Game day 2** (run 2 Oct 2026): write its record in `docs/gamedays/` from the template, including whether the alert reached the owner.

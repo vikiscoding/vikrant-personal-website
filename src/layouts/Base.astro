@@ -22,6 +22,9 @@ const canonical = new URL(Astro.url.pathname, Astro.site);
 const shareVersion = [...profile.headline].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7).toString(36);
 const shareImage = new URL(`/og.png?v=${shareVersion}`, Astro.site);
 const isCurrent = (href: string) => (href === "/" ? here === "/" : here.startsWith(href));
+// Page analytics (ADR-032): Umami Cloud, cookieless. Production builds only, so `astro dev` never loads it;
+// data-domains drops `wrangler dev` and workers.dev previews. The ID is public (it ships in every page).
+const umami = { src: "https://cloud.umami.is/script.js", websiteId: "24f843e5-1415-41b1-b4e2-68218aff2e20" };
 ---
 
 <!doctype html>
@@ -47,6 +50,9 @@ const isCurrent = (href: string) => (href === "/" ? here === "/" : here.startsWi
     <meta property="og:image:height" content="630" />
     <meta property="og:image:alt" content={`${profile.name}: ${profile.headline}`} />
     <meta name="twitter:card" content="summary_large_image" />
+    {import.meta.env.PROD && (
+      <script is:inline defer src={umami.src} data-website-id={umami.websiteId} data-domains="vikrantsingh.fyi" data-do-not-track="true" data-exclude-hash="true"></script>
+    )}
   </head>
   <body>
     <header class="site-head">
