@@ -364,7 +364,7 @@ export async function readLimits(env: Env, now = Date.now()): Promise<LimitsView
     rec?.usage && rec.usageAt && rec.usageAt.slice(0, 10) === new Date(now).toISOString().slice(0, 10)
       ? {
           as_of: rec.usageAt,
-          resets_at: new Date(nextReset()).toISOString(),
+          resets_at: new Date(nextReset(now)).toISOString(),
           new_day: Date.parse(rec.usageAt) - Date.parse(`${rec.usageAt.slice(0, 10)}T00:00:00Z`) < 15 * 60_000,
           items: ALLOWANCES.map((a) => {
             const used = rec!.usage!.find((u) => u.id === a.id)?.used ?? 0;
