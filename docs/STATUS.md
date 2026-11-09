@@ -21,6 +21,7 @@ Last updated: 10 Oct 2026. The site is feature-complete (see the note *This site
 | Ludo | `/ludo/` (ADR-026, ADR-027): one Durable Object per room; solo vs bots or up to four players on an invite link; bots capture first; a late joiner takes a bot's seat; an away player's seat is played at bot pace, labelled "(away)", and goes back to the bot after 2 minutes; a game everyone has left ends (at once on Leave, after 1 minute otherwise). Names and chat stay in the room. Server-measured SLIs on `/reliability/#ludo`. Details: `docs/ludo-telemetry.md` |
 | Page analytics | Umami Cloud, cookieless (ADR-032): one tag in `Base.astro`, production builds only, `data-domains="vikrantsingh.fyi"`, Do Not Track respected; events `resume-download` and `contact-click` on the home links; named on `/privacy` |
 | Visit counter | Counting, hidden until 1,000 views (`VISITS_MODE=auto`) |
+| Search | `/sitemap.xml` built from the pages at build time (unlisted drafts excluded); `robots.txt` points to it and blocks only `/api/` |
 | Brand | Favicon set and 1200×630 share image from `scripts/make-brand-assets.py` |
 
 ## Verified
