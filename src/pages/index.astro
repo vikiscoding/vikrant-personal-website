@@ -56,8 +56,8 @@ import { profile } from "../data/profile";
   <p>{profile.writingBlurb} <a href="/notes/">Read the notes and essays →</a></p>
 
   <p class="links">
-    {profile.links.resume && <><a href={profile.links.resume}>Résumé (PDF)</a> · </>}
-    {profile.links.email && <><a href={profile.links.email}>Email</a> · </>}
+    {profile.links.resume && <><a href={profile.links.resume} data-umami-event="resume-download">Résumé (PDF)</a> · </>}
+    {profile.links.email && <><a href={profile.links.email} data-umami-event="contact-click">Email</a> · </>}
     <a href={profile.links.linkedin} rel="me">LinkedIn</a>
     {profile.links.github && <> · <a href={profile.links.github} rel="me">GitHub</a></>}
   </p>
