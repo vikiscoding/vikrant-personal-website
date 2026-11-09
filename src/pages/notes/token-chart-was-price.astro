@@ -1,0 +1,186 @@
+---
+// On-site essay (ADR-033): the owner's text from 9 Nov 2026, published only here. Words are the owner's; layout
+// follows the content panel: the verdict up top for skimmers, tables kept as tables, sources numbered.
+// Figures trace to the Sources list (last checked 7 Nov 2026). Corrections go under a dated "Update"; never
+// rewrite a figure in place.
+import Base from "../../layouts/Base.astro";
+---
+
+<Base
+  title="Has AI token usage plateaued? No. Spending has. · vikrantsingh.fyi"
+  description="A team burned through its coding budget in weeks. The model was cheaper. The agents were longer. Online, people pointed at a falling chart and said demand had peaked. The chart was a price index."
+>
+  <p class="kicker"><time datetime="2026-11-09">9 November 2026</time> · Essay · 5 min read</p>
+  <h1>Has AI token usage plateaued? No. Spending has.</h1>
+  <p class="deck">
+    A team burned through its coding budget in weeks. The model was cheaper. The agents were longer. Online, people
+    pointed at a falling chart and said demand had peaked. The chart was a price index.
+  </p>
+
+  <aside class="answer" aria-label="Short answer">
+    <p><strong>Short answer:</strong> False on usage. Mostly true on spend, for now.</p>
+  </aside>
+
+  <h2>The claim</h2>
+  <p>AI token use has stopped growing. Demand has peaked. It shows up three ways.</p>
+  <ul>
+    <li><strong>“The chart is rolling over.”</strong> In June 2026 a Citadel note on Silicon Data’s LLM Token Expenditure Index went around. The line was falling. Posts read it as a collapse in token demand.</li>
+    <li><strong>“Even the big buyers are pulling back.”</strong> Uber used its full-year 2026 AI coding budget in about four months. Its COO said the payoff was hard to see. Microsoft reportedly cancelled most of its direct Claude Code licenses.</li>
+    <li><strong>“Business spending has gone flat.”</strong> Ramp’s lead economist reported two straight months, August and September 2026, of almost no growth in business token spend.</li>
+  </ul>
+
+  <h2>Why the claim is not silly</h2>
+  <p>
+    Growth looked like it slowed once before. Google reported about 480 trillion monthly tokens in May 2025, 980
+    trillion in July, and 1.3 quadrillion in October. Monthly additions fell. Critics said the headline number hid a
+    slowdown.
+  </p>
+  <p>
+    Tokens measure compute, not customers. Reasoning models and agents burn more tokens per request. Totals can rise
+    while the number of people using AI stays flat.
+  </p>
+  <p>
+    New customers are getting scarce. Paid AI adoption among US businesses on Ramp reached 55.9% in September 2026, up
+    0.6 points in a month. Ramp’s economist said it feels like the top of the S-curve. Growth has to come from heavier
+    use, not more buyers.
+  </p>
+  <p>
+    Money pays for data centres. Usage that brings in no extra revenue does not fund the next round of chips. Business
+    token spend did stall in August and September.
+  </p>
+
+  <h2>What the numbers show</h2>
+  <p>Volume is still rising. Price is falling. Spend stalled, then moved again.</p>
+
+  <h3>Volume: still compounding</h3>
+  <p>Google’s API traffic is the clearest volume number. Tokens per minute more than quadrupled in a year.</p>
+  <div class="scroll"><table>
+    <caption>
+      <strong>Google API tokens per minute, Q3 2025 to Q3 2026: 4.6×</strong>
+      <span class="small muted">Billions of tokens per minute. Figures between points are growth over the prior quarter.</span>
+    </caption>
+    <thead><tr><th scope="col">Quarter</th><th scope="col" class="num">Tokens per minute (bn)</th><th scope="col" class="num">Growth vs prior quarter</th></tr></thead>
+    <tbody>
+      <tr><th scope="row">Q3 2025</th><td class="num">7</td><td class="num">—</td></tr>
+      <tr><th scope="row">Q4 2025</th><td class="num">10</td><td class="num">+43%</td></tr>
+      <tr><th scope="row">Q1 2026</th><td class="num">16</td><td class="num">+60%</td></tr>
+      <tr><th scope="row">Q2 2026</th><td class="num">22</td><td class="num">+38%</td></tr>
+      <tr><th scope="row">Q3 2026</th><td class="num">32</td><td class="num">+45%</td></tr>
+    </tbody>
+  </table></div>
+  <p>
+    The late-2025 slowdown did not last. In May 2026 Google said it was processing 3.2 quadrillion tokens a month
+    across its products, seven times the year before.
+  </p>
+  <p>
+    OpenRouter, a marketplace developers use to reach many models, shows the same shape. Weekly volume went from 0.5
+    trillion tokens in January 2025 to 128.4 trillion in mid-September 2026. That is about 250 times higher. OpenRouter
+    says agents overtook humans as the larger token users around 6 February 2026. One secondary report put late-October
+    volume near 194 trillion a week. I could not open the original chart to confirm it.
+  </p>
+
+  <h3>Price: the chart that went viral</h3>
+  <p>
+    The index behind June’s panic measures the average price paid per million tokens, not how many tokens are used.
+    Silicon Data said a better name would have been a price index. It read $0.85 per million tokens on 5 November 2026.
+    It falls when buyers shift to cheaper models, even if they use more of them.
+  </p>
+
+  <h3>Spend: stalled, then moved</h3>
+  <p>Businesses on Ramp are using more tokens and paying only a little more for them.</p>
+  <div class="scroll"><table>
+    <caption class="small muted">Source: Ramp AI Index, firms using Ramp’s token spend product.</caption>
+    <thead><tr><th scope="col">Measure (businesses on Ramp)</th><th scope="col" class="num">Week ending 23 Oct vs 25 Sep 2026</th></tr></thead>
+    <tbody>
+      <tr><th scope="row">Token volume</th><td class="num">+37.1%</td></tr>
+      <tr><th scope="row">Token spend</th><td class="num">+8.9%</td></tr>
+      <tr><th scope="row">Blended price per million tokens (OpenAI and Anthropic)</th><td class="num">−26.8% ($0.76 to $0.56)</td></tr>
+    </tbody>
+  </table></div>
+  <p>
+    Ramp recorded almost no growth in token spend in August and September. Early October hit a new peak, 1.5% above
+    August. The latest week is up 8.9% on the month before. Its economist points to price cuts at the frontier and
+    cheaper models getting better. Uber and Microsoft are not pure cost cuts. Uber’s COO questioned the value, and
+    Microsoft reportedly cancelled licenses. Those are cuts in use, not just price shopping. The median firm paying for
+    AI spent $15.70 per employee a month in September. The top 1% spent $9,567.53.
+  </p>
+
+  <h2>What this means on a desk</h2>
+  <p>
+    Cheaper tokens do not mean a smaller bill when the agent multiplies the calls. The invoice is price times volume.
+    Most teams budget only the first. I have seen a weekly coding budget disappear in days because the model was
+    cheaper and the loop was longer.
+  </p>
+  <p>
+    If the spend stalls and the vendor tightens the key, the work that depended on the model stops. That is the same
+    test as <a href="https://svikrant.medium.com/ai-proposes-a-human-authorizes-b64a10734bea">the folder</a>. If
+    turning the model off breaks the process, the process was the model. A budget wall is just another way the model
+    goes down.
+  </p>
+  <p>
+    The volume rise is not free. It fills the review queue faster. The method for that does not change: sample, check
+    the cheap facts, put a person only on the step you cannot undo. The token chart does not fix the ratio.
+  </p>
+
+  <h2>Verdict</h2>
+  <p><strong>False on usage. Mostly true on spend, for now.</strong></p>
+  <p>
+    Token use has not plateaued. Google’s quarter-by-quarter API growth, OpenRouter, and Ramp all show volume still
+    rising. What stalled was how much businesses paid. Prices per token fell about as fast as usage rose, so the bill
+    flattened in August and September. Early October set a new peak and the latest week is up again. Most “plateau”
+    posts still read a price chart or a spend chart as a usage chart.
+  </p>
+
+  <h2>What would change the verdict</h2>
+  <ul>
+    <li>Google’s API tokens per minute stay flat or fall for two quarters in a row.</li>
+    <li>OpenRouter’s weekly volume goes sideways for two months or more, outside of promotions ending.</li>
+    <li>Ramp’s business token volume stops growing, not just spend.</li>
+    <li>The big cloud providers cut their AI capital spending plans.</li>
+  </ul>
+  <p>
+    One limit: tokens measure compute, not value. If agents get more efficient through caching or shorter reasoning,
+    token counts could flatten while real use grows. That would make tokens a worse yardstick, not a sign that demand
+    had peaked.
+  </p>
+
+  <h2>Sources</h2>
+  <p class="small muted">Last checked 7 November 2026.</p>
+  <ol class="sources">
+    <li><a href="https://ppc.land/gemini-app-gains-350m-users-in-a-year-to-pass-1bn-alphabet-says/">Gemini app gains 350m users in a year to pass 1bn, Alphabet says</a>, PPC Land, 29 October 2026</li>
+    <li><a href="https://www.digit.in/features/general/google-io-2026-sundar-pichai-gave-numbers-to-explain-rapid-ai-adoption.html">Google IO 2026: Sundar Pichai gave numbers to explain rapid AI adoption</a>, Digit, 20 May 2026</li>
+    <li><a href="https://www.implicator.ai/googles-quadrillion-tokens-brag-hides-a-slower-story/">Google's 'quadrillion tokens' brag hides a slower story</a>, Implicator, October 2025</li>
+    <li><a href="https://openrouter.ai/data/newsletter/the-token-state-of-play">The Token State of Play</a>, OpenRouter, 22 September 2026</li>
+    <li><a href="https://ramp.com/data/ai-index">Ramp AI Index</a>, data through 23 October 2026</li>
+    <li><a href="https://ramp.com/data/ai-index-oct-2026">Cracks in the AI Thesis Part 3</a>, Ramp, 14 October 2026</li>
+    <li><a href="https://www.silicondata.com/products/silicon-index/llm-token-expenditure-index">LLM Token Expenditure Index</a>, Silicon Data, as of 5 November 2026</li>
+    <li><a href="https://aidailybrief.beehiiv.com/p/the-ai-chart-everyone-is-getting-wrong">The AI Chart Everyone Is Getting Wrong</a>, The AI Daily Brief, 12 June 2026</li>
+    <li><a href="https://finance.yahoo.com/sectors/technology/articles/uber-burned-entire-2026-ai-180347400.html">Uber burned through its entire 2026 AI budget in four months</a>, Fortune via Yahoo Finance, 26 May 2026</li>
+  </ol>
+
+  <p class="more">
+    <a href="/notes/">All writing</a> · <a href="https://svikrant.medium.com/ai-proposes-a-human-authorizes-b64a10734bea">AI proposes. A human authorizes.</a> · <a href="https://svikrant.medium.com/you-will-not-read-the-pile-stop-designing-as-if-you-will-723dc7516de1">You will not read the pile</a>
+  </p>
+</Base>
+
+<style>
+  .kicker { color: var(--muted); font-size: 0.875rem; margin: 0 0 0.5rem; }
+  .deck { font-size: 1.0625rem; margin: 0 0 0.5rem; }
+  .answer { border-left: 3px solid var(--fg); padding: 0.35rem 0 0.35rem 0.9rem; margin: 1.25rem 0 0; }
+  .answer p { margin: 0; }
+  h2 { font-size: 1.125rem; margin: 2.25rem 0 0.5rem; }
+  h3 { font-size: 1rem; margin: 1.5rem 0 0.4rem; }
+  .small { font-size: 0.875rem; }
+  ul, .sources { padding-left: 1.2rem; }
+  li { margin: 0.4rem 0; }
+  .scroll { overflow-x: auto; margin: 0.75rem 0; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.9375rem; }
+  caption { text-align: left; margin-bottom: 0.4rem; }
+  caption span { display: block; margin-top: 0.15rem; }
+  th, td { text-align: left; vertical-align: top; padding: 0.4rem 0.5rem; border-bottom: 1px solid var(--line); }
+  thead th { color: var(--muted); font-weight: 500; }
+  tbody th { font-weight: 500; }
+  .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .sources { font-size: 0.9375rem; }
+  .more { margin-top: 2rem; font-size: 0.9375rem; }
+</style>

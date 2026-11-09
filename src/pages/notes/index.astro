@@ -1,6 +1,6 @@
 ---
-// Writing index. On-site notes first, then Medium posts (title, date, one claim, outbound link).
-// Never republish full posts here. Medium titles, dates and claims stay the feed's own words.
+// Writing index. On-site notes first, then essays (title, date, one claim, link): on-site essays (ADR-033) and Medium posts.
+// Never republish Medium posts here. Medium titles, dates and claims stay the feed's own words.
 import Base from "../../layouts/Base.astro";
 import { formatDate, siteNotes, writing } from "../../data/profile";
 ---
@@ -31,7 +31,7 @@ import { formatDate, siteNotes, writing } from "../../data/profile";
           <h3><a href={p.url}>{p.title}</a></h3>
           <p class="meta"><time class="muted" datetime={p.date}>{formatDate(p.date)}</time></p>
           <p class="claim">{p.claim}</p>
-          <p><a href={p.url}>Read on Medium →</a></p>
+          <p><a href={p.url}>{p.onSite ? "Read the essay →" : "Read on Medium →"}</a></p>
         </li>
       ))
     }

@@ -10,7 +10,7 @@ Last updated: 10 Oct 2026. The site is feature-complete (see the note *This site
 | --- | --- |
 | Site | https://vikrantsingh.fyi on Cloudflare Workers; `main` deploys through GitHub Actions; `http` and `www` redirect to the apex |
 | Homepage | Headline "IT Operations and Engineering"; the record (Citi/Virtusa, Ontario/CompuCom) with scope and no outcome percentages, which stay on the résumé; "What I'm building toward" links the product note; "A short path" (four links) above "Proof you can open": this site's reliability (Pulse run and Ludo inside it), the incident desk, Balance-Books, Atlas Flow's live site (ADR-022, ADR-023). Nav: Home · Live reliability · Writing · Play (ADR-024) |
-| Writing | `/notes/`: five site notes (the product note, the dependency board, the failure list, the free-tier postmortem, game day 1), then the Medium essays |
+| Writing | `/notes/`: five site notes (the product note, the dependency board, the failure list, the free-tier postmortem, game day 1), then the essays: one on this site (ADR-033, *Has AI token usage plateaued?*, 9 Nov 2026) and four on Medium |
 | Heartbeat | A scheduled job every 10 min reads this repo's latest commit and CI status from GitHub into KV; the footer shows it; `/api/pulse` returns 200 while the snapshot is under 35 min old |
 | Outside probe | UptimeRobot keyword monitor on `/api/pulse` every 5 min; email alerts. SLO clock Day 0 = 30 Sep 2026 |
 | SLI ledger | Durable Object `SliLedger`: daily counts and histograms per source, failures in full, read per source so no source can crowd out another; public `/api/slo?days=N`. Refused writes are logged as `ledger_unrecorded` and rebuilt from Workers Logs on the next healthy run (ADR-028) |

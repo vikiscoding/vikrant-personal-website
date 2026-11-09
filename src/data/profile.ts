@@ -14,12 +14,14 @@ export interface Proof {
 
 export interface Post {
   title: string;
-  /** Publish date on Medium, YYYY-MM-DD. */
+  /** Publish date, YYYY-MM-DD. */
   date: string;
   /** One claim, in the post's own words. */
   claim: string;
-  /** Canonical Medium URL. We list and link; we never republish. */
+  /** Canonical URL: Medium, or an on-site path for an essay published only here (ADR-033). Medium posts are never republished. */
   url: string;
+  /** True when the essay lives on this site, not Medium (ADR-033). */
+  onSite?: boolean;
 }
 
 /**
@@ -68,8 +70,18 @@ export const siteNotes: SiteNote[] = [
   },
 ];
 
-/** Medium posts, newest first. Titles, dates and URLs from the Medium feed (medium.com/feed/@svikrant), 30 Sep 2026. */
+/**
+ * Essays, newest first. Medium entries: titles, dates and URLs from the Medium feed (medium.com/feed/@svikrant), 30 Sep 2026.
+ * On-site essays (ADR-033) are the owner's own and published only here.
+ */
 export const writing: Post[] = [
+  {
+    title: "Has AI token usage plateaued? No. Spending has.",
+    date: "2026-11-09",
+    claim: "False on usage. Mostly true on spend, for now.",
+    url: "/notes/token-chart-was-price/",
+    onSite: true,
+  },
   {
     title: "Tests passed. Nobody can explain the change.",
     date: "2026-09-28",
